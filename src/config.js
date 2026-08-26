@@ -186,18 +186,32 @@ export async function probarConexion(url, timeout = 8000) {
       detalle: data
     };
   } catch (error) {
+    // Un 401/403 alcanza como prueba de vida: el backend respondió,
+    // solo que el recurso requiere autenticación.
+    if (esNoAutorizado(error)) {
+      return { ok: true, mensaje: 'Backend disponible (requiere autenticación)' };
+    }
+
     // Backends anteriores no tienen /api/health: probamos con /api/stats.
     if (error.response?.status === 404) {
       try {
         await cliente.get('/api/stats');
         return { ok: true, mensaje: 'Backend disponible (versión sin /api/health)' };
       } catch (fallback) {
+        if (esNoAutorizado(fallback)) {
+          return { ok: true, mensaje: 'Backend disponible (requiere autenticación)' };
+        }
         return { ok: false, mensaje: describirError(fallback) };
       }
     }
 
     return { ok: false, mensaje: describirError(error) };
   }
+}
+
+function esNoAutorizado(error) {
+  const status = error.response?.status;
+  return status === 401 || status === 403;
 }
 
 function describirError(error) {

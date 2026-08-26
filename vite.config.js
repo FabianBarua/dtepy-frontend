@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { createHtmlPlugin } from 'vite-plugin-html'
 
 export default defineConfig(({ mode }) => {
   // Carga el .env (todas las variables, no solo las VITE_*)
@@ -14,15 +13,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      vue(),
-      createHtmlPlugin({
-        minify: true,
-        inject: {
-          data: {
-            title: 'SIFEN - Sistema de Facturación Electrónica'
-          }
-        }
-      })
+      vue()
     ],
     server: {
       host: env.HOST || '0.0.0.0', // Permitir acceso desde otros equipos
