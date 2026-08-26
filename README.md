@@ -41,7 +41,7 @@ Interfaz de usuario moderna y responsiva para gestionar facturas electrónicas, 
 
 ### Prerrequisitos
 
-- Node.js 14+
+- Node.js 20.19+ (requisito de Vite 7)
 - Backend DTE-PY corriendo (por defecto se espera en el puerto 8081;
   ver [URL del Backend](#-url-del-backend))
 
