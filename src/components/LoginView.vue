@@ -67,23 +67,48 @@
             Si necesitas una cuenta, contacta al administrador.
           </p>
         </v-alert>
+
+        <v-divider class="mt-6"></v-divider>
+
+        <div class="d-flex justify-center mt-2">
+          <v-btn
+            variant="text"
+            size="small"
+            class="text-none"
+            @click="mostrarConfigServidor = true"
+          >
+            <v-icon start size="small">mdi-server-network</v-icon>
+            <span class="d-inline-block text-truncate" style="max-width: 240px;">
+              Servidor: {{ backendActual }}
+            </span>
+          </v-btn>
+        </div>
       </v-card-text>
     </v-card>
+
+    <ServerConfigDialog v-model="mostrarConfigServidor" />
   </v-container>
 </template>
 
 <script>
 import { ref } from 'vue';
 import axios from 'axios';
+import ServerConfigDialog from './ServerConfigDialog.vue';
+import { describirApiBaseUrl } from '../config';
 
 export default {
   name: 'LoginView',
+  components: {
+    ServerConfigDialog
+  },
   setup() {
     const username = ref('');
     const password = ref('');
     const error = ref('');
     const loading = ref(false);
     const showPassword = ref(false);
+    const mostrarConfigServidor = ref(false);
+    const backendActual = ref(describirApiBaseUrl());
 
     const handleLogin = async () => {
       error.value = '';
@@ -104,7 +129,13 @@ export default {
           window.location.href = '/';
         }
       } catch (err) {
-        error.value = err.response?.data?.error || 'Error al iniciar sesión';
+        if (err.response) {
+          error.value = err.response.data?.error || 'Error al iniciar sesión';
+        } else {
+          // Sin respuesta: backend caído, URL equivocada o CORS bloqueado
+          error.value = `No se pudo conectar con el backend (${backendActual.value}). ` +
+            'Revisá la configuración del servidor.';
+        }
       } finally {
         loading.value = false;
       }
@@ -116,7 +147,9 @@ export default {
       error,
       loading,
       showPassword,
-      handleLogin
+      handleLogin,
+      mostrarConfigServidor,
+      backendActual
     };
   }
 };

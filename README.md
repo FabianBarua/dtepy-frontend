@@ -42,7 +42,8 @@ Interfaz de usuario moderna y responsiva para gestionar facturas electrónicas, 
 ### Prerrequisitos
 
 - Node.js 14+
-- Backend corriendo en puerto 8081
+- Backend DTE-PY corriendo (por defecto se espera en el puerto 8081;
+  ver [URL del Backend](#-url-del-backend))
 
 ### Instalación
 
@@ -80,11 +81,15 @@ dtepy-frontend/
 │   │   ├── QueueStatusView.vue     # Monitor de cola
 │   │   ├── ApiKeysView.vue         # API Keys
 │   │   ├── LogsView.vue            # Logs de operaciones
-│   │   └── LoginView.vue           # Login
+│   │   ├── LoginView.vue           # Login
+│   │   └── ServerConfigDialog.vue  # Configurar la URL del backend
 │   ├── App.vue                     # Componente principal
 │   ├── main.js                     # Punto de entrada
-│   └── auth.js                     # Autenticación
+│   ├── auth.js                     # Autenticación
+│   └── config.js                   # Resolución de la URL del backend
 ├── public/
+│   └── config.js                   # Configuración de runtime (no pasa por el build)
+├── .env.example
 ├── package.json
 ├── vite.config.js
 └── README.md
@@ -179,13 +184,79 @@ Reemplazar en `src/App.vue`:
 <v-toolbar-title>Sistema de Facturación Electrónica SIFEN</v-toolbar-title>
 ```
 
+## 🔌 URL del Backend
+
+Todas las llamadas de la app son relativas (`/api/...`), así que la URL del
+backend se resuelve en un solo lugar: [`src/config.js`](src/config.js).
+
+Se toma **el primero que tenga valor**:
+
+| # | Origen | Dónde se define | Para qué sirve |
+|---|--------|-----------------|----------------|
+| 1 | Navegador | Botón **Servidor** en la app | Que cada usuario apunte a otro backend sin tocar el deploy |
+| 2 | Deploy | `config.js` (queda en `dist/config.js`) | Cambiar de backend **sin recompilar** |
+| 3 | Compilación | `VITE_API_BASE_URL` en `.env` | Fijar el backend al hacer el build |
+| 4 | Mismo origen | (por defecto) | Cuando hay un proxy delante (Vite o nginx) |
+
+### Desde la app
+
+Hay un botón **Servidor** en dos lugares:
+
+- En la pantalla de **login**, abajo de todo (importante: si la URL está mal,
+  no se puede ni iniciar sesión).
+- En la **barra superior**, al lado del indicador de conexión.
+
+El diálogo permite escribir la URL, **probar la conexión** contra
+`GET /api/health` antes de guardar, y **restablecer** para volver a la
+configuración del deploy. Se guarda en el navegador (`localStorage`).
+
+### En el deploy, sin recompilar
+
+`config.js` no pasa por el build: se copia tal cual a `dist/config.js`.
+
+```javascript
+// dist/config.js
+window.__APP_CONFIG__ = {
+  apiBaseUrl: "https://api.midominio.com"
+};
+```
+
+Se puede editar directamente en el servidor o montarlo como volumen en Docker:
+
+```yaml
+volumes:
+  - ./config.js:/usr/share/nginx/html/config.js:ro
+```
+
+### Al compilar
+
+```bash
+# .env
+VITE_API_BASE_URL=https://api.midominio.com
+```
+
+### CORS
+
+Si el backend está en **otro origen** (otro dominio o puerto), tiene que
+permitirlo. En el `.env` del backend:
+
+```bash
+CORS_ORIGINS=https://app.midominio.com
+```
+
+Si en cambio se usa un proxy (`location /api/` en nginx), no hace falta tocar
+nada: para el navegador es el mismo origen.
+
 ## 📡 Comunicación con el Backend
 
 El frontend usa **Axios** con interceptores:
 
 ```javascript
 // src/main.js
-axios.defaults.baseURL = 'http://localhost:8081';
+import { aplicarApiBaseUrl } from './config'
+
+// Resuelve la URL del backend y la aplica a axios
+aplicarApiBaseUrl();
 
 // Interceptor para agregar token
 axios.interceptors.request.use(config => {
@@ -235,7 +306,13 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy para API
+    # La configuración de runtime no se cachea: así un cambio de backend
+    # se ve enseguida, sin esperar a que expire el caché del navegador.
+    location = /config.js {
+        add_header Cache-Control "no-store";
+    }
+
+    # Proxy para API (opción "mismo origen": no hace falta configurar CORS)
     location /api/ {
         proxy_pass http://localhost:8081;
         proxy_http_version 1.1;
@@ -246,6 +323,10 @@ server {
     }
 }
 ```
+
+> Con este `location /api/`, dejá `apiBaseUrl` vacío: para el navegador el
+> backend está en el mismo origen. La URL del backend solo hace falta cuando
+> **no** hay proxy delante.
 
 ## 🧪 Testing
 

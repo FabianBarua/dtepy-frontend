@@ -14,10 +14,18 @@
       <v-chip :color="apiStatusColor" class="mr-2" variant="flat" size="small">
         <v-icon start size="small">{{ apiStatusIcon }}</v-icon>
         {{ apiStatusText }}
+        <v-tooltip activator="parent" location="bottom">{{ backendActual }}</v-tooltip>
       </v-chip>
 
       <v-btn icon @click="checkApiConnection">
         <v-icon>mdi-refresh</v-icon>
+      </v-btn>
+
+      <v-btn icon @click="mostrarConfigServidor = true">
+        <v-icon>mdi-server-network</v-icon>
+        <v-tooltip activator="parent" location="bottom">
+          Servidor: {{ backendActual }}
+        </v-tooltip>
       </v-btn>
 
       <!-- Menú de usuario -->
@@ -127,26 +135,37 @@
       <span>&copy; {{ new Date().getFullYear() }} DTE-PY - <a class="text-primary" style="text-decoration: none; cursor: pointer;" href="https://jaranetwork.com" target="_blank">Jara Network</a></span>
     </v-footer>
 
-    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
+    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="5000">
       {{ snackbarText }}
       <template v-slot:actions>
+        <v-btn
+          v-if="!apiConnected"
+          variant="text"
+          @click="snackbar = false; mostrarConfigServidor = true"
+        >
+          Configurar
+        </v-btn>
         <v-btn variant="text" @click="snackbar = false">Cerrar</v-btn>
       </template>
     </v-snackbar>
+
+    <ServerConfigDialog v-model="mostrarConfigServidor" />
   </v-app>
 </template>
 
 <script>
 import { ref, onMounted, reactive, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
 import { cerrarSesion } from './auth';
 import EmpresaSelector from './components/EmpresaSelector.vue';
+import ServerConfigDialog from './components/ServerConfigDialog.vue';
+import { describirApiBaseUrl, obtenerApiBaseUrl, probarConexion } from './config';
 
 export default {
   name: 'App',
   components: {
-    EmpresaSelector
+    EmpresaSelector,
+    ServerConfigDialog
   },
   setup() {
     const drawer = ref(null);
@@ -163,6 +182,10 @@ export default {
     const apiStatusColor = ref('grey');
     const apiStatusIcon = ref('mdi-help-circle');
     const apiStatusText = ref('Verificando...');
+
+    // Configuración del backend
+    const mostrarConfigServidor = ref(false);
+    const backendActual = ref(describirApiBaseUrl());
 
     // Estado de autenticación
     const autenticado = ref(false);
@@ -210,24 +233,25 @@ export default {
       apiStatusIcon.value = 'mdi-loading';
       apiStatusText.value = 'Verificando...';
 
-      try {
-        await axios.get('/api/stats', { timeout: 5000 });
+      const { ok, mensaje } = await probarConexion(obtenerApiBaseUrl(), 5000);
+
+      if (ok) {
         apiConnected.value = true;
         apiStatusColor.value = 'success';
         apiStatusIcon.value = 'mdi-check-circle';
         apiStatusText.value = 'Conectado';
         // No mostrar mensaje cuando hay conexión exitosa
-      } catch (error) {
+      } else {
         apiConnected.value = false;
         apiStatusColor.value = 'error';
         apiStatusIcon.value = 'mdi-close-circle';
         apiStatusText.value = 'Sin conexión';
-        snackbarText.value = 'No se puede conectar con la API';
+        snackbarText.value = `${backendActual.value}: ${mensaje}`;
         snackbarColor.value = 'error';
         snackbar.value = true;
-      } finally {
-        loadingApi.value = false;
       }
+
+      loadingApi.value = false;
     };
 
     onMounted(() => {
@@ -250,6 +274,8 @@ export default {
       snackbar,
       snackbarText,
       snackbarColor,
+      mostrarConfigServidor,
+      backendActual,
       checkApiConnection,
       cerrarSesion,
       cambiarEmpresa

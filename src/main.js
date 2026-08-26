@@ -26,8 +26,13 @@ import MantenimientoView from './components/MantenimientoView.vue'
 // Importar autenticación
 import { cargarSesion, cerrarSesion } from './auth'
 
-// Configurar axios
-axios.defaults.baseURL = '';
+// Importar configuración (URL del backend)
+import { aplicarApiBaseUrl, describirApiBaseUrl } from './config'
+
+// Configurar axios: la URL del backend sale de config.js
+// (navegador > public/config.js > VITE_API_BASE_URL > mismo origen)
+aplicarApiBaseUrl();
+console.log(`🔌 Backend: ${describirApiBaseUrl()}`);
 
 // Interceptor para agregar token a todas las peticiones
 axios.interceptors.request.use(
