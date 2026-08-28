@@ -357,6 +357,26 @@
                       outlined
                     ></v-text-field>
                   </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="formulario.configuracionSifen.monedasPermitidas"
+                      label="Monedas permitidas"
+                      :items="[
+                        { title: 'Guaraní (PYG)', value: 'PYG' },
+                        { title: 'Dólar (USD)', value: 'USD' },
+                        { title: 'Real (BRL)', value: 'BRL' },
+                        { title: 'Euro (EUR)', value: 'EUR' },
+                        { title: 'Peso argentino (ARS)', value: 'ARS' }
+                      ]"
+                      multiple
+                      chips
+                      :rules="[v => (v && v.length > 0) || 'Al menos una moneda']"
+                      hint="Política contable: facturas en otra moneda se rechazan"
+                      persistent-hint
+                      outlined
+                    ></v-select>
+                  </v-col>
                 </v-row>
               </v-col>
 
@@ -794,7 +814,8 @@ export default {
           envioFacturas: 'normal',
           timbradoFecha: '',
           establecimiento: '001',
-          puntoExpedicion: '001'
+          puntoExpedicion: '001',
+          monedasPermitidas: ['PYG', 'USD']
         }
       };
       mostrarDialogoFormulario.value = true;
@@ -823,7 +844,8 @@ export default {
           envioFacturas: empresa.configuracionSifen?.envioFacturas || 'normal',
           timbradoFecha: empresa.configuracionSifen?.timbradoFecha || '',
           establecimiento: empresa.configuracionSifen?.establecimiento || '001',
-          puntoExpedicion: empresa.configuracionSifen?.puntoExpedicion || '001'
+          puntoExpedicion: empresa.configuracionSifen?.puntoExpedicion || '001',
+          monedasPermitidas: [...(empresa.configuracionSifen?.monedasPermitidas || ['PYG', 'USD'])]
         }
       };
       mostrarDialogoFormulario.value = true;
