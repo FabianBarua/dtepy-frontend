@@ -104,6 +104,13 @@
           <v-list-item-title>API Keys</v-list-item-title>
         </v-list-item>
 
+        <v-list-item link to="/cotizaciones" :active="route.path === '/cotizaciones'">
+          <template v-slot:prepend>
+            <v-icon>mdi-currency-usd</v-icon>
+          </template>
+          <v-list-item-title>Cotizaciones</v-list-item-title>
+        </v-list-item>
+
         <v-list-item link to="/queue-status" :active="route.path === '/queue-status'">
           <template v-slot:prepend>
             <v-icon>mdi-clipboard-list-outline</v-icon>

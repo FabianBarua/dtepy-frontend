@@ -264,6 +264,7 @@ export default {
       { title: 'Leer facturas', value: 'facturas:leer' },
       { title: 'Eliminar facturas', value: 'facturas:eliminar' },
       { title: 'Ver estadísticas', value: 'stats:leer' },
+      { title: 'Declarar cotizaciones', value: 'cotizaciones:editar' },
       { title: 'Administrador', value: 'admin' }
     ];
 
