@@ -320,6 +320,166 @@
                       ℹ️ El CSC es proporcionado por la SET al habilitar la facturación electrónica. Son 32 caracteres hexadecimales.
                     </div>
                   </v-col>
+
+                  <v-col cols="12" md="4">
+                    <v-text-field
+                      v-model="formulario.configuracionSifen.timbradoFecha"
+                      label="Inicio vigencia timbrado"
+                      type="date"
+                      hint="Fecha dFeIniT de la constancia del timbrado"
+                      persistent-hint
+                      outlined
+                    ></v-text-field>
+                  </v-col>
+
+                  <v-col cols="6" md="4">
+                    <v-text-field
+                      v-model="formulario.configuracionSifen.establecimiento"
+                      label="Establecimiento por defecto"
+                      :rules="[v => !v || /^\d{1,3}$/.test(v) || '1-3 dígitos']"
+                      maxlength="3"
+                      placeholder="001"
+                      hint="Se usa si la factura no trae data.establecimiento"
+                      persistent-hint
+                      outlined
+                    ></v-text-field>
+                  </v-col>
+
+                  <v-col cols="6" md="4">
+                    <v-text-field
+                      v-model="formulario.configuracionSifen.puntoExpedicion"
+                      label="Punto de expedición por defecto"
+                      :rules="[v => !v || /^\d{1,3}$/.test(v) || '1-3 dígitos']"
+                      maxlength="3"
+                      placeholder="001"
+                      hint="Cada punto lleva su numeración correlativa propia"
+                      persistent-hint
+                      outlined
+                    ></v-text-field>
+                  </v-col>
+                </v-row>
+              </v-col>
+
+              <v-col cols="12" class="bg-grey-lighten-4 pa-4 rounded mt-2">
+                <div class="text-subtitle-1 font-weight-bold mb-1">
+                  <v-icon start color="primary">mdi-store</v-icon>
+                  Datos del Emisor
+                </div>
+                <div class="text-caption text-grey mb-3">
+                  Con estos datos cargados, las integraciones pueden emitir mandando solo cliente + items:
+                  el sistema completa emisor, sucursal, actividades y numeración automáticamente.
+                </div>
+
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="formulario.tipoContribuyente"
+                      label="Tipo de contribuyente"
+                      :items="[
+                        { title: 'Persona Física', value: 1 },
+                        { title: 'Persona Jurídica', value: 2 }
+                      ]"
+                      clearable
+                      outlined
+                    ></v-select>
+                  </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="formulario.tipoRegimen"
+                      label="Tipo de régimen"
+                      :items="[
+                        { title: '1 - Régimen de Turismo', value: 1 },
+                        { title: '2 - Importador', value: 2 },
+                        { title: '3 - Exportador', value: 3 },
+                        { title: '4 - Maquila', value: 4 },
+                        { title: '5 - Ley 60/90', value: 5 },
+                        { title: '6 - Régimen del Pequeño Productor', value: 6 },
+                        { title: '7 - Régimen del Mediano Productor', value: 7 },
+                        { title: '8 - Régimen Contable', value: 8 }
+                      ]"
+                      clearable
+                      outlined
+                    ></v-select>
+                  </v-col>
+
+                  <v-col cols="12">
+                    <div class="text-subtitle-2 font-weight-bold mb-2">Actividades económicas</div>
+                    <v-row v-for="(act, i) in formulario.actividadesEconomicas" :key="'act-' + i" dense>
+                      <v-col cols="4" md="3">
+                        <v-text-field v-model="act.codigo" label="Código" placeholder="46520" density="compact" outlined></v-text-field>
+                      </v-col>
+                      <v-col cols="7" md="8">
+                        <v-text-field v-model="act.descripcion" label="Descripción" density="compact" outlined></v-text-field>
+                      </v-col>
+                      <v-col cols="1" class="d-flex align-center">
+                        <v-btn icon size="small" color="error" variant="text" @click="quitarActividad(i)">
+                          <v-icon>mdi-delete</v-icon>
+                        </v-btn>
+                      </v-col>
+                    </v-row>
+                    <v-btn size="small" variant="tonal" color="primary" @click="agregarActividad">
+                      <v-icon start>mdi-plus</v-icon> Agregar actividad
+                    </v-btn>
+                  </v-col>
+
+                  <v-col cols="12">
+                    <div class="text-subtitle-2 font-weight-bold mb-2">Establecimientos (sucursales)</div>
+                    <v-card
+                      v-for="(est, i) in formulario.establecimientos"
+                      :key="'est-' + i"
+                      variant="outlined"
+                      class="pa-3 mb-3"
+                    >
+                      <v-row dense>
+                        <v-col cols="4" md="2">
+                          <v-text-field v-model="est.codigo" label="Código *" placeholder="001" maxlength="3" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="8" md="5">
+                          <v-text-field v-model="est.denominacion" label="Denominación *" placeholder="Casa Matriz" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="8" md="4">
+                          <v-text-field v-model="est.direccion" label="Dirección" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="4" md="1">
+                          <v-text-field v-model="est.numeroCasa" label="N° casa" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="4" md="2">
+                          <v-text-field v-model.number="est.departamento" label="Depto (cód)" type="number" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="8" md="4">
+                          <v-text-field v-model="est.departamentoDescripcion" label="Departamento" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="4" md="2">
+                          <v-text-field v-model.number="est.distrito" label="Distrito (cód)" type="number" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="8" md="4">
+                          <v-text-field v-model="est.distritoDescripcion" label="Distrito" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="4" md="2">
+                          <v-text-field v-model.number="est.ciudad" label="Ciudad (cód)" type="number" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="8" md="4">
+                          <v-text-field v-model="est.ciudadDescripcion" label="Ciudad" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="6" md="3">
+                          <v-text-field v-model="est.telefono" label="Teléfono" density="compact" outlined></v-text-field>
+                        </v-col>
+                        <v-col cols="6" md="3">
+                          <v-text-field v-model="est.email" label="Email" density="compact" outlined></v-text-field>
+                        </v-col>
+                      </v-row>
+                      <v-btn size="small" color="error" variant="text" @click="quitarEstablecimiento(i)">
+                        <v-icon start>mdi-delete</v-icon> Quitar establecimiento
+                      </v-btn>
+                    </v-card>
+                    <v-btn size="small" variant="tonal" color="primary" @click="agregarEstablecimiento">
+                      <v-icon start>mdi-plus</v-icon> Agregar establecimiento
+                    </v-btn>
+                    <div class="text-caption text-grey mt-2">
+                      ℹ️ Los códigos deben coincidir con los habilitados en el timbrado ante la DNIT.
+                    </div>
+                  </v-col>
                 </v-row>
               </v-col>
             </v-row>
@@ -621,13 +781,20 @@ export default {
         direccion: '',
         telefono: '',
         email: '',
+        tipoContribuyente: 2,
+        tipoRegimen: null,
+        actividadesEconomicas: [],
+        establecimientos: [],
         configuracionSifen: {
           timbrado: '12345678',
           idCSC: '0001',
           csc: '',
           modo: 'test',
           urlLogo: '',
-          envioFacturas: 'normal'
+          envioFacturas: 'normal',
+          timbradoFecha: '',
+          establecimiento: '001',
+          puntoExpedicion: '001'
         }
       };
       mostrarDialogoFormulario.value = true;
@@ -643,16 +810,43 @@ export default {
         direccion: empresa.direccion || '',
         telefono: empresa.telefono || '',
         email: empresa.email || '',
+        tipoContribuyente: empresa.tipoContribuyente ?? 2,
+        tipoRegimen: empresa.tipoRegimen ?? null,
+        actividadesEconomicas: JSON.parse(JSON.stringify(empresa.actividadesEconomicas || [])),
+        establecimientos: JSON.parse(JSON.stringify(empresa.establecimientos || [])),
         configuracionSifen: {
           timbrado: empresa.configuracionSifen?.timbrado || '12345678',
           idCSC: empresa.configuracionSifen?.idCSC || '0001',
           csc: empresa.configuracionSifen?.csc || '',
           modo: empresa.configuracionSifen?.modo || 'test',
           urlLogo: empresa.configuracionSifen?.urlLogo || '',
-          envioFacturas: empresa.configuracionSifen?.envioFacturas || 'normal'
+          envioFacturas: empresa.configuracionSifen?.envioFacturas || 'normal',
+          timbradoFecha: empresa.configuracionSifen?.timbradoFecha || '',
+          establecimiento: empresa.configuracionSifen?.establecimiento || '001',
+          puntoExpedicion: empresa.configuracionSifen?.puntoExpedicion || '001'
         }
       };
       mostrarDialogoFormulario.value = true;
+    };
+
+    // Filas dinámicas: actividades económicas y establecimientos
+    const agregarActividad = () => {
+      formulario.value.actividadesEconomicas.push({ codigo: '', descripcion: '' });
+    };
+    const quitarActividad = (i) => {
+      formulario.value.actividadesEconomicas.splice(i, 1);
+    };
+    const agregarEstablecimiento = () => {
+      formulario.value.establecimientos.push({
+        codigo: '', denominacion: '', direccion: '', numeroCasa: '',
+        departamento: null, departamentoDescripcion: '',
+        distrito: null, distritoDescripcion: '',
+        ciudad: null, ciudadDescripcion: '',
+        telefono: '', email: ''
+      });
+    };
+    const quitarEstablecimiento = (i) => {
+      formulario.value.establecimientos.splice(i, 1);
     };
     
     // Cerrar formulario
