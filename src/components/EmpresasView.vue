@@ -502,6 +502,52 @@
                   </v-col>
                 </v-row>
               </v-col>
+
+              <v-col cols="12" class="bg-grey-lighten-4 pa-4 rounded mt-2">
+                <div class="text-subtitle-1 font-weight-bold mb-1">
+                  <v-icon start color="primary">mdi-bell-ring</v-icon>
+                  Notificaciones
+                </div>
+                <div class="text-caption text-grey mb-3">
+                  Avisos automáticos cuando una factura llega a estado final (aprobada/rechazada).
+                </div>
+
+                <v-row>
+                  <v-col cols="12" md="7">
+                    <v-text-field
+                      v-model="formulario.notificaciones.webhookUrl"
+                      label="Webhook URL"
+                      placeholder="https://miweb.com/api/webhook-facturas"
+                      hint="POST firmado (HMAC) con el resultado y links de PDF/XML. Vacío = desactivado"
+                      persistent-hint
+                      outlined
+                    ></v-text-field>
+                  </v-col>
+
+                  <v-col cols="12" md="5">
+                    <v-text-field
+                      v-model="formulario.notificaciones.webhookSecret"
+                      label="Webhook Secret"
+                      hint="Para verificar la firma X-DTE-Firma. Se genera solo si queda vacío"
+                      persistent-hint
+                      :type="mostrarSecret ? 'text' : 'password'"
+                      :append-inner-icon="mostrarSecret ? 'mdi-eye-off' : 'mdi-eye'"
+                      @click:append-inner="mostrarSecret = !mostrarSecret"
+                      outlined
+                    ></v-text-field>
+                  </v-col>
+
+                  <v-col cols="12">
+                    <v-switch
+                      v-model="formulario.notificaciones.emailAutomatico"
+                      color="primary"
+                      label="Enviar KUDE por email al cliente automáticamente al aprobarse"
+                      hint="Requiere SMTP configurado en el servidor (SMTP_HOST, SMTP_USER, SMTP_PASS...)"
+                      persistent-hint
+                    ></v-switch>
+                  </v-col>
+                </v-row>
+              </v-col>
             </v-row>
           </v-form>
         </v-card-text>
@@ -729,6 +775,7 @@ export default {
     const contrasenaCertificado = ref('');
     const mostrarContrasena = ref(false);
     const mostrarCSC = ref(false);
+    const mostrarSecret = ref(false);
     
     // Empresa seleccionada
     const empresaSeleccionada = ref(null);
@@ -805,6 +852,7 @@ export default {
         tipoRegimen: null,
         actividadesEconomicas: [],
         establecimientos: [],
+        notificaciones: { webhookUrl: '', webhookSecret: '', emailAutomatico: false },
         configuracionSifen: {
           timbrado: '12345678',
           idCSC: '0001',
@@ -835,6 +883,11 @@ export default {
         tipoRegimen: empresa.tipoRegimen ?? null,
         actividadesEconomicas: JSON.parse(JSON.stringify(empresa.actividadesEconomicas || [])),
         establecimientos: JSON.parse(JSON.stringify(empresa.establecimientos || [])),
+        notificaciones: {
+          webhookUrl: empresa.notificaciones?.webhookUrl || '',
+          webhookSecret: empresa.notificaciones?.webhookSecret || '',
+          emailAutomatico: empresa.notificaciones?.emailAutomatico || false
+        },
         configuracionSifen: {
           timbrado: empresa.configuracionSifen?.timbrado || '12345678',
           idCSC: empresa.configuracionSifen?.idCSC || '0001',
@@ -1021,6 +1074,7 @@ export default {
       contrasenaCertificado,
       mostrarContrasena,
       mostrarCSC,
+      mostrarSecret,
 
       // Empresa seleccionada
       empresaSeleccionada,
