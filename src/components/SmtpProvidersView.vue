@@ -200,7 +200,17 @@
                 ></v-text-field>
               </v-col>
 
-              <v-col cols="12">
+              <v-col cols="12" md="6">
+                <v-switch
+                  v-model="formulario.validarCertificado"
+                  color="primary"
+                  label="Validar certificado TLS"
+                  hint="Desactivar para servidores con certificado autofirmado (ej. poste.io propio)"
+                  persistent-hint
+                ></v-switch>
+              </v-col>
+
+              <v-col cols="12" md="6">
                 <v-switch
                   v-model="formulario.activo"
                   color="primary"
@@ -345,6 +355,7 @@ export default {
       usuario: '',
       contrasena: '',
       remitente: '',
+      validarCertificado: true,
       activo: true
     });
 
@@ -397,6 +408,7 @@ export default {
         usuario: '',
         contrasena: '',
         remitente: '',
+        validarCertificado: true,
         activo: true
       };
       mostrarDialogoFormulario.value = true;
@@ -412,6 +424,7 @@ export default {
         usuario: provider.usuario,
         contrasena: '',   // vacío = mantener la actual
         remitente: provider.remitente || '',
+        validarCertificado: provider.validarCertificado !== false,
         activo: provider.activo
       };
       mostrarDialogoFormulario.value = true;
