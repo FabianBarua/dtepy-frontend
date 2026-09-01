@@ -111,6 +111,13 @@
           <v-list-item-title>Cotizaciones</v-list-item-title>
         </v-list-item>
 
+        <v-list-item link to="/smtp-providers" :active="route.path === '/smtp-providers'">
+          <template v-slot:prepend>
+            <v-icon>mdi-email-fast</v-icon>
+          </template>
+          <v-list-item-title>Proveedores SMTP</v-list-item-title>
+        </v-list-item>
+
         <v-list-item link to="/queue-status" :active="route.path === '/queue-status'">
           <template v-slot:prepend>
             <v-icon>mdi-clipboard-list-outline</v-icon>

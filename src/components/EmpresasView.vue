@@ -537,14 +537,28 @@
                     ></v-text-field>
                   </v-col>
 
-                  <v-col cols="12">
+                  <v-col cols="12" md="6">
                     <v-switch
                       v-model="formulario.notificaciones.emailAutomatico"
                       color="primary"
                       label="Enviar KUDE por email al cliente automáticamente al aprobarse"
-                      hint="Requiere SMTP configurado en el servidor (SMTP_HOST, SMTP_USER, SMTP_PASS...)"
+                      hint="Usa el proveedor SMTP seleccionado; sin proveedor, el SMTP del servidor"
                       persistent-hint
                     ></v-switch>
+                  </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="formulario.notificaciones.smtpProviderId"
+                      label="Proveedor SMTP"
+                      :items="opcionesSmtp"
+                      item-title="title"
+                      item-value="value"
+                      clearable
+                      hint="Se gestionan en la sección Proveedores SMTP. Vacío = SMTP del servidor"
+                      persistent-hint
+                      outlined
+                    ></v-select>
                   </v-col>
                 </v-row>
               </v-col>
@@ -779,6 +793,23 @@ export default {
     
     // Empresa seleccionada
     const empresaSeleccionada = ref(null);
+
+    // Proveedores SMTP disponibles (para el selector de notificaciones)
+    const smtpProviders = ref([]);
+    const opcionesSmtp = computed(() =>
+      smtpProviders.value.map((p) => ({
+        title: `${p.nombre} (${p.host})${p.activo ? '' : ' — inactivo'}`,
+        value: p._id
+      }))
+    );
+    const cargarSmtpProviders = async () => {
+      try {
+        const response = await axios.get('/api/smtp-providers', { params: { _t: Date.now() } });
+        smtpProviders.value = response.data.data || [];
+      } catch (error) {
+        console.error('❌ Error cargando proveedores SMTP:', error);
+      }
+    };
     
     // Snackbar
     const snackbar = ref(false);
@@ -852,7 +883,7 @@ export default {
         tipoRegimen: null,
         actividadesEconomicas: [],
         establecimientos: [],
-        notificaciones: { webhookUrl: '', webhookSecret: '', emailAutomatico: false },
+        notificaciones: { webhookUrl: '', webhookSecret: '', emailAutomatico: false, smtpProviderId: null },
         configuracionSifen: {
           timbrado: '12345678',
           idCSC: '0001',
@@ -886,7 +917,8 @@ export default {
         notificaciones: {
           webhookUrl: empresa.notificaciones?.webhookUrl || '',
           webhookSecret: empresa.notificaciones?.webhookSecret || '',
-          emailAutomatico: empresa.notificaciones?.emailAutomatico || false
+          emailAutomatico: empresa.notificaciones?.emailAutomatico || false,
+          smtpProviderId: empresa.notificaciones?.smtpProviderId || null
         },
         configuracionSifen: {
           timbrado: empresa.configuracionSifen?.timbrado || '12345678',
@@ -1047,8 +1079,11 @@ export default {
       }
     };
     
-    // Cargar empresas al montar
-    onMounted(cargarEmpresas);
+    // Cargar empresas y proveedores SMTP al montar
+    onMounted(() => {
+      cargarEmpresas();
+      cargarSmtpProviders();
+    });
     
     return {
       // Estado
@@ -1078,6 +1113,9 @@ export default {
 
       // Empresa seleccionada
       empresaSeleccionada,
+
+      // Proveedores SMTP
+      opcionesSmtp,
       
       // Dependencias
       dependencias,

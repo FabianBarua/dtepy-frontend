@@ -23,6 +23,7 @@ import LotesView from './components/LotesView.vue'
 import LoteDetailView from './components/LoteDetailView.vue'
 import MantenimientoView from './components/MantenimientoView.vue'
 import CotizacionesView from './components/CotizacionesView.vue'
+import SmtpProvidersView from './components/SmtpProvidersView.vue'
 
 // Importar autenticación
 import { cargarSesion, cerrarSesion } from './auth'
@@ -76,7 +77,8 @@ const routes = [
   { path: '/lotes', component: LotesView, meta: { requiereAuth: true } },
   { path: '/lotes/:id', component: LoteDetailView, meta: { requiereAuth: true } },
   { path: '/mantenimiento', component: MantenimientoView, meta: { requiereAuth: true } },
-  { path: '/cotizaciones', component: CotizacionesView, meta: { requiereAuth: true } }
+  { path: '/cotizaciones', component: CotizacionesView, meta: { requiereAuth: true } },
+  { path: '/smtp-providers', component: SmtpProvidersView, meta: { requiereAuth: true } }
 ]
 
 // Crear router
