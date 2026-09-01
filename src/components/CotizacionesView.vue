@@ -19,6 +19,141 @@
           </p>
         </v-alert>
 
+        <!-- Actualización automática -->
+        <v-card variant="outlined" class="mb-6">
+          <v-card-title class="d-flex align-center py-3">
+            <v-icon start color="primary">mdi-cloud-sync</v-icon>
+            <span class="text-subtitle-1 font-weight-bold">Actualización automática</span>
+            <v-spacer></v-spacer>
+            <v-chip
+              v-if="auto.ultimaSincronizacion"
+              :color="colorEstadoSync(auto.ultimaSincronizacion.estado)"
+              size="small"
+              variant="tonal"
+            >
+              {{ etiquetaEstadoSync(auto.ultimaSincronizacion.estado) }}
+            </v-chip>
+          </v-card-title>
+
+          <v-card-text>
+            <div class="text-caption text-medium-emphasis mb-4">
+              En Paraguay la cotización que rige hoy es la que la SET/DNIT publicó ayer.
+              El sistema la busca apenas cambia el día y, si la fuente todavía no la publicó,
+              reintenta cada 5 minutos. Hoy corresponde la del <strong>{{ auto.fechaObjetivo || '—' }}</strong>.
+            </div>
+
+            <v-row dense>
+              <v-col v-if="empresas.length > 1" cols="12" md="4">
+                <v-select
+                  v-model="auto.empresaId"
+                  :items="empresas"
+                  item-title="nombreFantasia"
+                  item-value="_id"
+                  label="Empresa"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  @update:model-value="cargarAuto"
+                ></v-select>
+              </v-col>
+
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="auto.proveedor"
+                  :items="proveedores"
+                  item-title="nombre"
+                  item-value="id"
+                  label="Proveedor"
+                  variant="outlined"
+                  density="comfortable"
+                  :hint="proveedorActual?.descripcion"
+                  persistent-hint
+                  @update:model-value="auto.monedas = []"
+                ></v-select>
+              </v-col>
+
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="auto.monedas"
+                  :items="proveedorActual?.monedas || []"
+                  label="Monedas a actualizar"
+                  variant="outlined"
+                  density="comfortable"
+                  multiple
+                  chips
+                  hint="Solo estas se declaran solas; el resto sigue manual"
+                  persistent-hint
+                ></v-select>
+              </v-col>
+
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="auto.tipoValor"
+                  :items="[
+                    { title: 'Venta', value: 'venta' },
+                    { title: 'Compra', value: 'compra' },
+                    { title: 'Promedio compra/venta', value: 'promedio' }
+                  ]"
+                  label="Valor a usar"
+                  variant="outlined"
+                  density="comfortable"
+                  hint="Cuál de los dos valores del par se declara"
+                  persistent-hint
+                ></v-select>
+              </v-col>
+
+              <v-col cols="12" md="4">
+                <v-text-field
+                  v-model.number="auto.variacionMaximaPct"
+                  label="Variación máxima (%)"
+                  type="number"
+                  variant="outlined"
+                  density="comfortable"
+                  hint="Un salto mayor no se aplica solo: queda para revisión"
+                  persistent-hint
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" md="4" class="d-flex align-center">
+                <v-switch
+                  v-model="auto.activo"
+                  color="primary"
+                  label="Activar actualización automática"
+                  hide-details
+                ></v-switch>
+              </v-col>
+            </v-row>
+
+            <v-alert
+              v-if="auto.ultimaSincronizacion"
+              :type="tipoAlertaSync(auto.ultimaSincronizacion.estado)"
+              variant="tonal"
+              density="compact"
+              class="mt-4"
+            >
+              <div class="text-body-2">
+                <strong>Última verificación:</strong> {{ formatoFecha(auto.ultimaSincronizacion.en) }}
+                <span v-if="auto.ultimaSincronizacion.fechaCotizacion">
+                  — cotización del {{ auto.ultimaSincronizacion.fechaCotizacion }}
+                </span>
+              </div>
+              <div class="text-caption">{{ auto.ultimaSincronizacion.mensaje }}</div>
+            </v-alert>
+          </v-card-text>
+
+          <v-card-actions class="px-4 pb-4">
+            <v-btn variant="tonal" :loading="sincronizando" @click="sincronizarAhora">
+              <v-icon start>mdi-refresh</v-icon>
+              Sincronizar ahora
+            </v-btn>
+            <v-spacer></v-spacer>
+            <v-btn color="primary" :loading="guardandoAuto" @click="guardarAuto">
+              <v-icon start>mdi-content-save</v-icon>
+              Guardar configuración
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+
         <h3 class="text-subtitle-1 font-weight-bold mb-2">Vigentes</h3>
         <v-data-table
           :headers="headersVigentes"
@@ -41,6 +176,9 @@
           <template v-slot:item.declaradaPor="{ item }">
             {{ item.declaradaPor?.nombre || (item.declaradaPor?.tipo === 'api_key' ? 'API' : '-') }}
             <v-chip v-if="item.declaradaPor?.tipo === 'api_key'" size="x-small" class="ml-1" variant="outlined">API</v-chip>
+            <v-chip v-else-if="item.declaradaPor?.tipo === 'automatica'" size="x-small" class="ml-1" color="primary" variant="tonal">
+              <v-icon start size="x-small">mdi-cloud-sync</v-icon>AUTO
+            </v-chip>
           </template>
           <template v-slot:item.declaradaEn="{ item }">
             {{ formatoFecha(item.declaradaEn) }}
@@ -87,6 +225,7 @@
           <template v-slot:item.declaradaPor="{ item }">
             {{ item.declaradaPor?.nombre || '-' }}
             <v-chip v-if="item.declaradaPor?.tipo === 'api_key'" size="x-small" class="ml-1" variant="outlined">API</v-chip>
+            <v-chip v-else-if="item.declaradaPor?.tipo === 'automatica'" size="x-small" class="ml-1" color="primary" variant="tonal">AUTO</v-chip>
           </template>
           <template v-slot:item.createdAt="{ item }">
             {{ formatoFecha(item.createdAt) }}
@@ -174,6 +313,107 @@ export default {
 
     const form = ref({ empresaId: null, moneda: 'USD', valor: '' });
 
+    // Actualización automática
+    const proveedores = ref([]);
+    const guardandoAuto = ref(false);
+    const sincronizando = ref(false);
+    const auto = ref({
+      empresaId: null,
+      activo: false,
+      proveedor: 'sistemaaguila',
+      monedas: [],
+      tipoValor: 'venta',
+      variacionMaximaPct: 10,
+      ultimaSincronizacion: null,
+      fechaObjetivo: null
+    });
+
+    const proveedorActual = computed(
+      () => proveedores.value.find((p) => p.id === auto.value.proveedor) || null
+    );
+
+    const ETIQUETAS_SYNC = {
+      ok: 'Actualizada',
+      sin_cambios: 'Al día',
+      pendiente_fuente: 'Esperando a la fuente',
+      bloqueada: 'Requiere revisión',
+      error: 'Error'
+    };
+    const COLORES_SYNC = {
+      ok: 'success',
+      sin_cambios: 'success',
+      pendiente_fuente: 'info',
+      bloqueada: 'warning',
+      error: 'error'
+    };
+    const etiquetaEstadoSync = (estado) => ETIQUETAS_SYNC[estado] || estado || '-';
+    const colorEstadoSync = (estado) => COLORES_SYNC[estado] || 'grey';
+    const tipoAlertaSync = (estado) => {
+      if (estado === 'error') return 'error';
+      if (estado === 'bloqueada') return 'warning';
+      if (estado === 'pendiente_fuente') return 'info';
+      return 'success';
+    };
+
+    const cargarProveedores = async () => {
+      try {
+        const { data } = await axios.get('/api/cotizaciones/proveedores');
+        proveedores.value = data.data || [];
+      } catch (error) {
+        proveedores.value = [];
+      }
+    };
+
+    const cargarAuto = async () => {
+      try {
+        const params = {};
+        if (auto.value.empresaId) params.empresaId = auto.value.empresaId;
+        const { data } = await axios.get('/api/cotizaciones/automatica', { params });
+        auto.value = { ...auto.value, ...data.data };
+      } catch (error) {
+        // sin empresa resuelta todavía: se deja la configuración por defecto
+      }
+    };
+
+    const guardarAuto = async () => {
+      guardandoAuto.value = true;
+      try {
+        const body = {
+          activo: auto.value.activo,
+          proveedor: auto.value.proveedor,
+          monedas: auto.value.monedas,
+          tipoValor: auto.value.tipoValor,
+          variacionMaximaPct: Number(auto.value.variacionMaximaPct)
+        };
+        if (auto.value.empresaId) body.empresaId = auto.value.empresaId;
+        const { data } = await axios.put('/api/cotizaciones/automatica', body);
+        mostrar(data.message || 'Configuración guardada', 'success');
+        await cargarAuto();
+      } catch (error) {
+        mostrar(error.response?.data?.message || 'No se pudo guardar la configuración', 'error');
+      } finally {
+        guardandoAuto.value = false;
+      }
+    };
+
+    const sincronizarAhora = async () => {
+      sincronizando.value = true;
+      try {
+        const body = {};
+        if (auto.value.empresaId) body.empresaId = auto.value.empresaId;
+        const { data } = await axios.post('/api/cotizaciones/sincronizar', body);
+        const resumen = data.data || {};
+        mostrar(resumen.mensaje || 'Sincronización ejecutada', tipoAlertaSync(resumen.estado));
+        await Promise.all([cargarAuto(), cargarVigentes(), cargarHistorial()]);
+      } catch (error) {
+        const resumen = error.response?.data?.data;
+        mostrar(resumen?.mensaje || error.response?.data?.message || 'No se pudo sincronizar', 'error');
+        await cargarAuto();
+      } finally {
+        sincronizando.value = false;
+      }
+    };
+
     const headersVigentes = [
       { title: 'Moneda', key: 'moneda' },
       { title: 'Cotización', key: 'valor' },
@@ -242,7 +482,10 @@ export default {
       try {
         const { data } = await axios.get('/api/empresas');
         empresas.value = data.data || [];
-        if (empresas.value.length === 1) form.value.empresaId = empresas.value[0]._id;
+        if (empresas.value.length >= 1) {
+          if (empresas.value.length === 1) form.value.empresaId = empresas.value[0]._id;
+          auto.value.empresaId = empresas.value[0]._id;
+        }
       } catch (error) {
         empresas.value = [];
       }
@@ -296,7 +539,7 @@ export default {
 
     onMounted(async () => {
       await cargarEmpresas();
-      await Promise.all([cargarVigentes(), cargarHistorial()]);
+      await Promise.all([cargarVigentes(), cargarHistorial(), cargarProveedores(), cargarAuto()]);
     });
 
     return {
@@ -304,7 +547,11 @@ export default {
       guardando, dialogo, errorForm, filtroMoneda, snackbar, snackbarTexto,
       snackbarColor, monedasSugeridas, form, headersVigentes, headersHistorial,
       monedasDelHistorial, pistaValor, nombreEmpresa, formatoGs, formatoFecha,
-      cargarHistorial, abrirDialogo, declarar
+      cargarHistorial, abrirDialogo, declarar,
+      // actualización automática
+      proveedores, proveedorActual, auto, guardandoAuto, sincronizando,
+      cargarAuto, guardarAuto, sincronizarAhora,
+      etiquetaEstadoSync, colorEstadoSync, tipoAlertaSync
     };
   }
 };
