@@ -97,7 +97,7 @@
                   label="Valor a usar"
                   variant="outlined"
                   density="comfortable"
-                  hint="Cuál de los dos valores del par se declara"
+                  hint="Cuál de los dos valores del par se declara. Al cambiarlo, la próxima sincronización lo recalcula con la última cotización publicada"
                   persistent-hint
                 ></v-select>
               </v-col>
@@ -179,6 +179,9 @@
             <v-chip v-else-if="item.declaradaPor?.tipo === 'automatica'" size="x-small" class="ml-1" color="primary" variant="tonal">
               <v-icon start size="x-small">mdi-cloud-sync</v-icon>AUTO
             </v-chip>
+            <div v-if="item.fuente?.fechaCotizacion" class="text-caption text-medium-emphasis">
+              {{ procedencia(item.fuente) }}
+            </div>
           </template>
           <template v-slot:item.declaradaEn="{ item }">
             {{ formatoFecha(item.declaradaEn) }}
@@ -226,6 +229,9 @@
             {{ item.declaradaPor?.nombre || '-' }}
             <v-chip v-if="item.declaradaPor?.tipo === 'api_key'" size="x-small" class="ml-1" variant="outlined">API</v-chip>
             <v-chip v-else-if="item.declaradaPor?.tipo === 'automatica'" size="x-small" class="ml-1" color="primary" variant="tonal">AUTO</v-chip>
+            <div v-if="item.fuente?.fechaCotizacion" class="text-caption text-medium-emphasis">
+              {{ procedencia(item.fuente) }}
+            </div>
           </template>
           <template v-slot:item.createdAt="{ item }">
             {{ formatoFecha(item.createdAt) }}
@@ -449,6 +455,13 @@ export default {
       return empresa ? empresa.nombreFantasia : '-';
     };
 
+    // "valor de compra · cotización del 2026-09-02": con esto se ve de un
+    // vistazo cuál de los dos valores del par quedó declarado.
+    const procedencia = (fuente) => {
+      if (!fuente?.fechaCotizacion) return '';
+      return `valor de ${fuente.tipoValor || 'venta'} · cotización del ${fuente.fechaCotizacion}`;
+    };
+
     const formatoGs = (valor) => new Intl.NumberFormat('es-PY').format(valor);
     const formatoFecha = (fecha) => (fecha ? new Date(fecha).toLocaleString('es-PY') : '-');
 
@@ -546,7 +559,7 @@ export default {
       vigentes, historial, empresas, loadingVigentes, loadingHistorial,
       guardando, dialogo, errorForm, filtroMoneda, snackbar, snackbarTexto,
       snackbarColor, monedasSugeridas, form, headersVigentes, headersHistorial,
-      monedasDelHistorial, pistaValor, nombreEmpresa, formatoGs, formatoFecha,
+      monedasDelHistorial, pistaValor, nombreEmpresa, formatoGs, formatoFecha, procedencia,
       cargarHistorial, abrirDialogo, declarar,
       // actualización automática
       proveedores, proveedorActual, auto, guardandoAuto, sincronizando,
