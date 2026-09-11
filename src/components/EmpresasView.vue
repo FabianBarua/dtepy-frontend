@@ -10,7 +10,7 @@
 
           <v-spacer></v-spacer>
 
-          <v-btn color="primary" @click="mostrarDialogoFormulario = true">
+          <v-btn color="primary" @click="nuevaEmpresa">
             <v-icon start>mdi-plus</v-icon>
             Nueva Empresa
           </v-btn>
@@ -27,6 +27,7 @@
               :headers="headers"
               :items="empresasDisplayadas"
               :loading="cargando"
+              items-per-page="-1"
               hide-default-footer
               item-key="_id"
               class="elevation-0"
@@ -121,7 +122,7 @@
                 <div class="text-center py-8">
                   <v-icon size="64" color="grey-lighten-2">mdi-office-building-outline</v-icon>
                   <p class="text-grey mt-2">No hay empresas registradas</p>
-                  <v-btn color="primary" class="mt-2" @click="mostrarDialogoFormulario = true">
+                  <v-btn color="primary" class="mt-2" @click="nuevaEmpresa">
                     <v-icon start>mdi-plus</v-icon>
                     Crear primera empresa
                   </v-btn>
@@ -169,7 +170,7 @@
                   :rules="[
                     v => !!v || 'RUC requerido',
                     v => {
-                      const sinGuiones = v.replace(/[^0-9]/g, '');
+                      const sinGuiones = String(v ?? '').replace(/[^0-9]/g, '');
                       return sinGuiones.length >= 6 && sinGuiones.length <= 12 || 'RUC inválido (6-12 dígitos)';
                     }
                   ]"
@@ -767,22 +768,32 @@ export default {
     const formRef = ref(null);
     const formularioValido = ref(false);
     const empresaEnEdicion = ref(null);
-    const formulario = ref({
+    const formularioVacio = () => ({
       ruc: '',
       nombreFantasia: '',
       razonSocial: '',
       direccion: '',
       telefono: '',
       email: '',
+      tipoContribuyente: 2,
+      tipoRegimen: null,
+      actividadesEconomicas: [],
+      establecimientos: [],
+      notificaciones: { webhookUrl: '', webhookSecret: '', emailAutomatico: false, smtpProviderId: null },
       configuracionSifen: {
         timbrado: '12345678',
         idCSC: '0001',
         csc: '',
         modo: 'test',
         urlLogo: '',
-        envioFacturas: 'normal'
+        envioFacturas: 'normal',
+        timbradoFecha: '',
+        establecimiento: '001',
+        puntoExpedicion: '001',
+        monedasPermitidas: ['PYG', 'USD']
       }
     });
+    const formulario = ref(formularioVacio());
     
     // Certificado
     const archivoCertificado = ref(null);
@@ -856,7 +867,7 @@ export default {
         console.log('✅ Empresas cargadas:', empresas.value.length);
       } catch (error) {
         console.error('❌ Error cargando empresas:', error);
-        mostrarSnackbar('Error cargando empresas: ' + error.message, 'error');
+        mostrarSnackbar('Error cargando empresas: ' + (error.response?.data?.message || error.response?.data?.error || error.message), 'error');
       } finally {
         cargando.value = false;
       }
@@ -967,10 +978,9 @@ export default {
     
     // Guardar empresa
     const guardarEmpresa = async () => {
-      if (!formRef.value || !formularioValido.value) {
-        formRef.value?.validate();
-        return;
-      }
+      if (!formRef.value) return;
+      const { valid } = await formRef.value.validate();
+      if (!valid) return;
       
       guardando.value = true;
       try {

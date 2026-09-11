@@ -147,7 +147,7 @@
               Sincronizar ahora
             </v-btn>
             <v-spacer></v-spacer>
-            <v-btn color="primary" :loading="guardandoAuto" @click="guardarAuto">
+            <v-btn color="primary" :loading="guardandoAuto" :disabled="auto.cargada === false" @click="guardarAuto">
               <v-icon start>mdi-content-save</v-icon>
               Guardar configuración
             </v-btn>
@@ -297,12 +297,14 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
+import { useEmpresaActiva } from '../composables/useEmpresaActiva';
 
 export default {
   name: 'CotizacionesView',
   setup() {
+    const { empresaActiva } = useEmpresaActiva();
     const vigentes = ref([]);
     const historial = ref([]);
     const empresas = ref([]);
@@ -367,6 +369,7 @@ export default {
         proveedores.value = data.data || [];
       } catch (error) {
         proveedores.value = [];
+        mostrar('No se pudieron cargar los proveedores de cotización: ' + (error.response?.data?.message || error.message), 'error');
       }
     };
 
@@ -375,9 +378,11 @@ export default {
         const params = {};
         if (auto.value.empresaId) params.empresaId = auto.value.empresaId;
         const { data } = await axios.get('/api/cotizaciones/automatica', { params });
-        auto.value = { ...auto.value, ...data.data };
+        auto.value = { ...auto.value, ...data.data, cargada: true };
       } catch (error) {
-        // sin empresa resuelta todavía: se deja la configuración por defecto
+        // No pisar una configuración real con los defaults: se bloquea el guardado
+        auto.value.cargada = false;
+        mostrar('No se pudo leer la configuración de actualización automática: ' + (error.response?.data?.message || error.message), 'error');
       }
     };
 
@@ -491,16 +496,24 @@ export default {
       }
     };
 
+    const empresaSeleccionadaId = () => {
+      // Respetar el selector global (RUC) del header; si no hay, la primera
+      const activa = empresaActiva.value ? empresas.value.find(e => e.ruc === empresaActiva.value) : null;
+      return (activa || empresas.value[0])?._id || null;
+    };
+
     const cargarEmpresas = async () => {
       try {
         const { data } = await axios.get('/api/empresas');
         empresas.value = data.data || [];
-        if (empresas.value.length >= 1) {
-          if (empresas.value.length === 1) form.value.empresaId = empresas.value[0]._id;
-          auto.value.empresaId = empresas.value[0]._id;
+        const id = empresaSeleccionadaId();
+        if (id) {
+          form.value.empresaId = id;
+          auto.value.empresaId = id;
         }
       } catch (error) {
         empresas.value = [];
+        mostrar('No se pudieron cargar las empresas: ' + (error.response?.data?.message || error.message), 'error');
       }
     };
 
@@ -553,6 +566,13 @@ export default {
     onMounted(async () => {
       await cargarEmpresas();
       await Promise.all([cargarVigentes(), cargarHistorial(), cargarProveedores(), cargarAuto()]);
+    });
+
+    // Cambio de empresa en el header: recargar todo para esa empresa
+    watch(empresaActiva, async () => {
+      const id = empresaSeleccionadaId();
+      if (id) { form.value.empresaId = id; auto.value.empresaId = id; }
+      await Promise.all([cargarVigentes(), cargarHistorial(), cargarAuto()]);
     });
 
     return {

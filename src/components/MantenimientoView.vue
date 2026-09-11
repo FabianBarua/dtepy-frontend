@@ -1,7 +1,7 @@
 <template>
   <v-container fluid>
     <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="4000" location="top">
-      <v-icon :start="snackbarIcon" size="large">{{ snackbarIcon }}</v-icon>
+      <v-icon start size="large">{{ snackbarIcon }}</v-icon>
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" @click="snackbar = false">Cerrar</v-btn>
@@ -20,7 +20,7 @@
           </v-card-title>
           <v-card-text>
             <p class="text-body-2 text-medium-emphasis mb-4">
-              Elimina todas las facturas y registros de operaciones de la base de datos.
+              Elimina las facturas de prueba y sus registros de operaciones (rechazadas, con error, encoladas). Los documentos que existen en SET (aprobados, observados o cancelados, con CDC) se conservan siempre: son comprobantes fiscales.
               Esta acción no se puede deshacer.
             </p>
             <v-btn
@@ -137,7 +137,7 @@
         </v-card-title>
         <v-card-text class="mt-4">
           <v-alert type="warning" variant="tonal" icon="mdi-alert" class="mb-3">
-            <strong>⚠️ Advertencia:</strong> Esta acción eliminará permanentemente todas las facturas de la base de datos.
+            <strong>⚠️ Advertencia:</strong> Esta acción eliminará permanentemente las facturas que nunca llegaron a SET, <strong>de todas las empresas</strong>. Los documentos aprobados, observados o cancelados en SET se conservan.
           </v-alert>
           <p class="text-body-1">
             ¿Estás <strong>SEGURO</strong> de que deseas continuar?
@@ -165,7 +165,7 @@
           <v-btn
             color="grey"
             variant="text"
-            @click="clearDialog = false"
+            @click="clearDialog = false; passwordConfirm = ''"
             :disabled="clearing"
           >
             Cancelar
@@ -334,7 +334,7 @@ export default {
         passwordConfirm.value = '';
       } catch (error) {
         console.error('Error limpiando base de datos:', error);
-        snackbarText.value = `❌ ${error.response?.data?.error || error.response?.data?.message || error.message}`;
+        snackbarText.value = `❌ ${error.response?.data?.message || error.response?.data?.error || error.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;
@@ -373,19 +373,22 @@ export default {
           all: '/api/queue/clear-all'
         }[queueDialogType.value];
 
-        const [facResult, kudeResult] = await Promise.all([
+        const resultados = await Promise.allSettled([
           axios.post(endpoint, { queue: 'facturacion' }),
           axios.post(endpoint, { queue: 'kude' })
         ]);
-
-        snackbarText.value = `✅ ${facResult.data.message} (KUDE: ${kudeResult.data.message})`;
-        snackbarColor.value = 'success';
-        snackbarIcon.value = 'mdi-check-circle';
+        const texto = (r, nombre) => r.status === 'fulfilled'
+          ? `${nombre}: ${r.value.data.message}`
+          : `${nombre}: ERROR ${r.reason?.response?.data?.message || r.reason?.response?.data?.error || r.reason?.message}`;
+        const huboError = resultados.some(r => r.status === 'rejected');
+        snackbarText.value = `${huboError ? '⚠️' : '✅'} ${texto(resultados[0], 'Facturación')} · ${texto(resultados[1], 'KUDE')}`;
+        snackbarColor.value = huboError ? 'warning' : 'success';
+        snackbarIcon.value = huboError ? 'mdi-alert' : 'mdi-check-circle';
         snackbar.value = true;
         queueDialog.value = false;
       } catch (error) {
         console.error('Error al limpiar jobs:', error);
-        snackbarText.value = `❌ ${error.response?.data?.message || error.message}`;
+        snackbarText.value = `❌ ${error.response?.data?.message || error.response?.data?.error || error.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;
@@ -412,7 +415,7 @@ export default {
         logsDialog.value = false;
       } catch (error) {
         console.error('Error al limpiar logs:', error);
-        snackbarText.value = `❌ ${error.response?.data?.message || error.message}`;
+        snackbarText.value = `❌ ${error.response?.data?.message || error.response?.data?.error || error.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;

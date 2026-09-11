@@ -1,51 +1,22 @@
 <template>
   <v-container fluid>
+    <div class="d-flex align-center mb-2">
+      <span class="text-caption text-medium-emphasis">
+        <template v-if="empresaActiva">Empresa RUC {{ empresaActiva }}</template>
+        <template v-else>Todas las empresas</template>
+        · actualizado {{ hace(ultimaCarga) || 'recién' }}
+      </span>
+      <v-spacer></v-spacer>
+      <v-btn variant="text" size="small" prepend-icon="mdi-refresh" :loading="cargando" @click="loadStats">Actualizar</v-btn>
+    </div>
+
     <v-row>
-      <v-col cols="12" sm="6" md="3">
-        <v-card color="primary" dark>
-          <v-card-title class="text-h6">
-            <v-icon left>mdi-file-document</v-icon>
-            Total Facturas
+      <v-col v-for="t in tarjetas" :key="t.titulo" cols="12" sm="6" md="3">
+        <v-card :color="t.color" theme="dark" class="tarjeta" @click="irFiltrado(t.filtro)">
+          <v-card-title class="text-subtitle-1 d-flex align-center">
+            <v-icon start>{{ t.icono }}</v-icon>{{ t.titulo }}
           </v-card-title>
-          <v-card-text class="text-h4">
-            {{ stats.totalFacturas || 0 }}
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card color="success" dark>
-          <v-card-title class="text-h6">
-            <v-icon left>mdi-check-circle</v-icon>
-            Aceptadas
-          </v-card-title>
-          <v-card-text class="text-h4">
-            {{ stats.facturasAceptadas || stats.facturasPorEstado?.find(s => s._id === 'aceptado')?.count || 0 }}
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card color="warning" dark>
-          <v-card-title class="text-h6">
-            <v-icon left>mdi-timer-sand</v-icon>
-            Procesando
-          </v-card-title>
-          <v-card-text class="text-h4">
-            {{ stats.facturasProcesando || stats.facturasPorEstado?.find(s => s._id === 'procesando')?.count || 0 }}
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card color="error" dark>
-          <v-card-title class="text-h6">
-            <v-icon left>mdi-alert-circle</v-icon>
-            Errores/Rechazadas
-          </v-card-title>
-          <v-card-text class="text-h4">
-            {{ (stats.facturasError || stats.facturasPorEstado?.find(s => s._id === 'error')?.count || 0) + (stats.facturasRechazadas || stats.facturasPorEstado?.find(s => s._id === 'rechazado')?.count || 0) }}
-          </v-card-text>
+          <v-card-text class="text-h4">{{ t.valor }}</v-card-text>
         </v-card>
       </v-col>
     </v-row>
@@ -53,84 +24,54 @@
     <v-row>
       <v-col cols="12" md="8">
         <v-card>
-          <v-card-title>Actividad Reciente</v-card-title>
+          <v-card-title class="text-subtitle-1">Actividad reciente</v-card-title>
           <v-card-text>
-            <v-data-table
-              :headers="recentActivityHeaders"
-              :items="recentInvoices"
-              :items-per-page="5"
-              class="elevation-1"
-            >
-              <template v-slot:item.facturaHash="{ item }">
-                <v-chip size="small" variant="outlined" color="grey">
-                  {{ item.facturaHash?.substring(0, 8) }}...
-                </v-chip>
+            <v-data-table :headers="recentActivityHeaders" :items="recentInvoices" :loading="cargando" items-per-page="-1" hide-default-footer density="compact">
+              <template #item.correlativo="{ item }">
+                <router-link :to="`/invoices/${item._id}`" class="text-decoration-none text-mono">{{ item.correlativo }}</router-link>
+                <v-chip size="x-small" variant="outlined" color="primary" label class="ml-1">{{ tipoCorto(item.de) }}</v-chip>
               </template>
-
-              <template v-slot:item.cliente.ruc="{ item }">
-                <span class="font-weight-medium">{{ item.cliente?.ruc || '-' }}</span>
+              <template #item.cliente="{ item }">
+                <div class="text-truncate" style="max-width: 220px">{{ item.cliente?.nombre || '-' }}</div>
+                <div class="text-caption text-medium-emphasis">{{ item.cliente?.ruc }}</div>
               </template>
-
-              <template v-slot:item.estadoSifen="{ item }">
-                <v-chip
-                  :color="getStatusColor(item.estado)"
-                  dark
-                >
-                  {{ item.estado }}
-                </v-chip>
+              <template #item.total="{ item }">{{ formatMonto(item.total, item.moneda) }}</template>
+              <template #item.estado="{ item }">
+                <v-chip :color="estadoInfo(item.estado).color" size="small" variant="flat">{{ estadoInfo(item.estado).etiqueta }}</v-chip>
               </template>
-              <template v-slot:item.createdAt="{ item }">
-                {{ formatDate(item.createdAt) }}
-              </template>
-              <template v-slot:item.actions="{ item }">
-                <v-btn
-                  color="primary"
-                  size="small"
-                  @click="viewInvoice(item._id)"
-                >
-                  Ver
-                </v-btn>
-              </template>
+              <template #item.fechaCreacion="{ item }">{{ formatFechaHora(item.fechaCreacion) }}</template>
             </v-data-table>
+            <div class="text-end mt-2">
+              <v-btn variant="text" size="small" append-icon="mdi-arrow-right" @click="router.push('/invoices')">Ver todos los documentos</v-btn>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
 
       <v-col cols="12" md="4">
         <v-card>
-          <v-card-title>Estados de Facturas</v-card-title>
+          <v-card-title class="text-subtitle-1">Por estado</v-card-title>
           <v-card-text>
-            <v-list>
-              <v-list-item
-                v-for="estado in stats.facturasPorEstado"
-                :key="estado._id"
-              >
-                <v-list-item-title>{{ estado._id }}</v-list-item-title>
-                <v-list-item-subtitle>{{ estado.count }} facturas</v-list-item-subtitle>
-                <template v-slot:prepend>
-                  <v-chip
-                    :color="getStatusColor(estado._id)"
-                    size="small"
-                    label
-                  >
-                    {{ estado.count }}
-                  </v-chip>
+            <v-list density="compact">
+              <v-list-item v-for="e in porEstado" :key="e._id" link @click="irFiltrado({ estado: e._id })">
+                <template #prepend>
+                  <v-chip :color="estadoInfo(e._id).color" size="small" variant="flat" label class="mr-3" style="min-width: 44px; justify-content: center">{{ e.count }}</v-chip>
                 </template>
+                <v-list-item-title>{{ estadoInfo(e._id).etiqueta }}</v-list-item-title>
               </v-list-item>
+              <v-list-item v-if="!porEstado.length"><v-list-item-title class="text-medium-emphasis">Sin documentos</v-list-item-title></v-list-item>
             </v-list>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <v-row class="mt-4">
+    <v-row class="mt-2">
       <v-col cols="12">
         <v-card>
-          <v-card-title>Tendencias de Facturación</v-card-title>
+          <v-card-title class="text-subtitle-1">Últimos 7 días</v-card-title>
           <v-card-text>
-            <div style="height: 300px;">
-              <canvas ref="tendenciasChart"></canvas>
-            </div>
+            <div style="height: 300px;"><canvas ref="tendenciasChart"></canvas></div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -139,185 +80,110 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
+import { useEmpresaActiva } from '../composables/useEmpresaActiva';
+import { notificar } from '../composables/useNotificaciones';
+import { mensajeDeError } from '../utils/errores';
+import { formatMonto, formatFechaHora, hace, estadoInfo, tipoCorto } from '../utils/formato';
 
 Chart.register(...registerables);
 
 export default {
   name: 'DashboardView',
   setup() {
+    const router = useRouter();
+    const route = useRoute();
+    const { empresaActiva, sincronizarDesdeQuery } = useEmpresaActiva();
     const stats = ref({});
     const recentInvoices = ref([]);
+    const cargando = ref(false);
+    const ultimaCarga = ref(null);
     const tendenciasChart = ref(null);
     let chartInstance = null;
-    
+
     const recentActivityHeaders = [
-      { title: 'Hash', key: 'facturaHash', sortable: false },
-      { title: 'RUC', key: 'cliente.ruc' },
-      { title: 'CDC', key: 'cdc' },
-      { title: 'Cliente', key: 'cliente.nombre' },
-      { title: 'Estado', key: 'estado' },
-      { title: 'Fecha', key: 'createdAt' },
-      { title: 'Acciones', key: 'actions', sortable: false }
+      { title: 'Fecha', key: 'fechaCreacion', width: 150 },
+      { title: 'Número', key: 'correlativo' },
+      { title: 'Cliente', key: 'cliente' },
+      { title: 'Total', key: 'total', align: 'end' },
+      { title: 'Estado', key: 'estado', width: 130 }
     ];
 
-    const getStatusColor = (status) => {
-      switch(status) {
-        case 'enviado':
-        case 'aceptado':
-          return 'success';
-        case 'procesando':
-          return 'warning';
-        case 'error':
-        case 'rechazado':
-          return 'error';
-        default:
-          return 'info';
-      }
-    };
+    const cuenta = (estado) => stats.value.facturasPorEstado?.find(s => s._id === estado)?.count || 0;
+    const porEstado = computed(() => [...(stats.value.facturasPorEstado || [])].sort((a, b) => b.count - a.count));
+    const tarjetas = computed(() => [
+      { titulo: 'Documentos', valor: stats.value.totalFacturas || 0, color: 'primary', icono: 'mdi-file-document', filtro: {} },
+      { titulo: 'Aprobados', valor: cuenta('aceptado') + cuenta('observado'), color: 'success', icono: 'mdi-check-circle', filtro: { estado: 'aceptado,observado' } },
+      { titulo: 'En curso', valor: cuenta('encolado') + cuenta('procesando') + cuenta('enviado'), color: 'warning', icono: 'mdi-timer-sand', filtro: { estado: 'encolado,procesando,enviado' } },
+      { titulo: 'Rechazados / error', valor: cuenta('rechazado') + cuenta('error'), color: 'error', icono: 'mdi-alert-circle', filtro: { estado: 'rechazado,error' } }
+    ]);
 
-    const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
-    };
-
-    const viewInvoice = (id) => {
-      window.location.href = `/invoices/${id}`;
+    const irFiltrado = (filtro) => {
+      const query = { ...filtro };
+      if (empresaActiva.value) query.empresa = empresaActiva.value;
+      router.push({ path: '/invoices', query });
     };
 
     const loadStats = async () => {
+      cargando.value = true;
       try {
-        const statsResponse = await axios.get('/api/stats');
+        const params = empresaActiva.value ? { rucEmpresa: empresaActiva.value } : {};
+        const [statsResponse, invoicesResponse] = await Promise.all([
+          axios.get('/api/stats', { params }),
+          axios.get('/api/invoices', { params: { page: 1, limit: 8, ...params } })
+        ]);
         stats.value = statsResponse.data.data || statsResponse.data;
-
-        // Cargar las facturas recientes
-        const invoicesResponse = await axios.get('/api/invoices?page=1&limit=5');
-        recentInvoices.value = invoicesResponse.data.invoices;
-
-        // Crear gráfico de tendencias
+        recentInvoices.value = invoicesResponse.data.invoices || [];
+        ultimaCarga.value = new Date();
         crearGraficoTendencias(stats.value.tendenciasPorDia || []);
       } catch (error) {
-        console.error('Error cargando estadísticas:', error);
+        notificar.error(`No se pudieron cargar las estadísticas: ${mensajeDeError(error)}`);
+      } finally {
+        cargando.value = false;
       }
     };
 
     const crearGraficoTendencias = (tendencias) => {
       const ctx = tendenciasChart.value;
       if (!ctx) return;
+      if (chartInstance) chartInstance.destroy();
 
-      // Destruir gráfico anterior si existe
-      if (chartInstance) {
-        chartInstance.destroy();
-      }
-
-      // Preparar datos
-      const labels = tendencias.map(t => {
-        const fecha = new Date(t._id);
-        return fecha.toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' });
-      });
-      const counts = tendencias.map(t => t.count);
-      const totals = tendencias.map(t => t.total || 0);
-
-      // Crear gráfico
+      const labels = tendencias.map(t => new Date(`${t._id}T12:00:00`).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' }));
       chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: labels,
+          labels,
           datasets: [
-            {
-              label: 'Cantidad de Facturas',
-              data: counts,
-              backgroundColor: 'rgba(25, 118, 210, 0.7)',
-              borderColor: 'rgba(25, 118, 210, 1)',
-              borderWidth: 1,
-              yAxisID: 'y'
-            },
-            {
-              label: 'Total Facturado (Gs.)',
-              data: totals,
-              type: 'line',
-              borderColor: 'rgba(76, 175, 80, 1)',
-              backgroundColor: 'rgba(76, 175, 80, 0.1)',
-              borderWidth: 2,
-              pointBackgroundColor: 'rgba(76, 175, 80, 1)',
-              yAxisID: 'y1'
-            }
+            { label: 'Documentos', data: tendencias.map(t => t.count), backgroundColor: 'rgba(25, 118, 210, 0.7)', borderColor: 'rgba(25, 118, 210, 1)', borderWidth: 1, yAxisID: 'y' },
+            { label: 'Total (según moneda de cada documento)', data: tendencias.map(t => t.total || 0), type: 'line', borderColor: 'rgba(76, 175, 80, 1)', backgroundColor: 'rgba(76, 175, 80, 0.1)', borderWidth: 2, pointBackgroundColor: 'rgba(76, 175, 80, 1)', yAxisID: 'y1' }
           ]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false
-          },
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top'
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  let label = context.dataset.label || '';
-                  if (label) {
-                    label += ': ';
-                  }
-                  if (context.dataset.type === 'line') {
-                    label += 'Gs. ' + new Intl.NumberFormat('es-PY').format(context.parsed.y);
-                  } else {
-                    label += context.parsed.y;
-                  }
-                  return label;
-                }
-              }
-            }
-          },
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { display: true, position: 'top' } },
           scales: {
-            y: {
-              type: 'linear',
-              display: true,
-              position: 'left',
-              title: {
-                display: true,
-                text: 'Cantidad de Facturas'
-              },
-              ticks: {
-                stepSize: 1
-              }
-            },
-            y1: {
-              type: 'linear',
-              display: true,
-              position: 'right',
-              title: {
-                display: true,
-                text: 'Total Facturado (Gs.)'
-              },
-              grid: {
-                drawOnChartArea: false
-              }
-            }
+            y: { type: 'linear', position: 'left', title: { display: true, text: 'Documentos' }, ticks: { stepSize: 1 } },
+            y1: { type: 'linear', position: 'right', title: { display: true, text: 'Total' }, grid: { drawOnChartArea: false } }
           }
         }
       });
     };
 
-    onMounted(() => {
-      loadStats();
-    });
+    watch(empresaActiva, loadStats);
+    onMounted(() => { sincronizarDesdeQuery(route.query); loadStats(); });
+    onBeforeUnmount(() => { if (chartInstance) chartInstance.destroy(); });
 
-    return {
-      stats,
-      recentInvoices,
-      recentActivityHeaders,
-      getStatusColor,
-      formatDate,
-      viewInvoice,
-      tendenciasChart
-    };
+    return { router, empresaActiva, stats, recentInvoices, cargando, ultimaCarga, tendenciasChart, recentActivityHeaders, tarjetas, porEstado, irFiltrado, loadStats, formatMonto, formatFechaHora, hace, estadoInfo, tipoCorto };
   }
 };
 </script>
+
+<style scoped>
+.tarjeta { cursor: pointer; transition: transform .12s ease; }
+.tarjeta:hover { transform: translateY(-2px); }
+.text-mono { font-family: 'Courier New', Courier, monospace; }
+</style>

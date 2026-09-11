@@ -152,6 +152,9 @@ export default {
     );
 
     const urlNormalizada = computed(() => normalizarUrl(url.value));
+
+    // Si el usuario cambia la URL, el resultado de la prueba anterior ya no aplica
+    watch(url, () => { resultado.value = null; });
     const errorValidacion = computed(() => validarUrl(url.value));
     const origenFrontend = computed(() => window.location.origin);
     const esOtroOrigen = computed(
@@ -183,7 +186,9 @@ export default {
 
     const guardar = () => {
       if (errorValidacion.value) return;
+      const antes = obtenerConfigApi().url;
       guardarApiBaseUrl(url.value);
+      if (normalizarUrl(url.value) === antes) { cerrar(false); return; } // nada cambió: no recargar
       aplicarYRecargar();
     };
 

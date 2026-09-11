@@ -22,6 +22,7 @@
           :headers="headers"
           :items="apiKeysDisplayadas"
           :loading="loading"
+          items-per-page="-1"
           hide-default-footer
           class="elevation-1"
         >
@@ -246,6 +247,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
+import { notificar } from '../composables/useNotificaciones';
 
 export default {
   name: 'ApiKeysView',
@@ -302,7 +304,6 @@ export default {
     });
 
     const abrirDialogoNuevaKey = () => {
-      console.log('🔑 Abriendo diálogo para nueva API Key');
       // Resetear formulario
       nuevaKey.value = {
         nombre: '',
@@ -311,7 +312,6 @@ export default {
         expiracion: ''
       };
       showNewKeyDialog.value = true;
-      console.log('✅ Diálogo abierto:', showNewKeyDialog.value);
     };
 
     const listarApiKeys = async () => {
@@ -321,7 +321,7 @@ export default {
         apiKeys.value = response.data.data || [];
       } catch (error) {
         console.error('Error listando API Keys:', error);
-        alert('Error al cargar API Keys');
+        notificar.error('Error al cargar las API Keys: ' + (error.response?.data?.error || error.message));
       } finally {
         loading.value = false;
       }
@@ -332,13 +332,13 @@ export default {
       
       // Validar que haya nombre
       if (!nuevaKey.value.nombre) {
-        alert('El nombre es requerido');
+        notificar.aviso('El nombre es requerido');
         return;
       }
 
       // Validar que haya permisos
       if (!nuevaKey.value.permisos || nuevaKey.value.permisos.length === 0) {
-        alert('Seleccione al menos un permiso');
+        notificar.aviso('Seleccioná al menos un permiso');
         return;
       }
 
@@ -369,7 +369,7 @@ export default {
       } catch (error) {
         console.error('❌ Error creando API Key:', error);
         console.error('Detalles:', error.response?.data);
-        alert('Error al crear API Key: ' + (error.response?.data?.error || error.message));
+        notificar.error('Error al crear la API Key: ' + (error.response?.data?.error || error.message));
       } finally {
         loadingCrear.value = false;
       }
@@ -382,11 +382,11 @@ export default {
 
       try {
         const response = await axios.put(`/api/api-keys/${key.id}/renew`);
-        keyCreada.value = response.data.data;
+        keyCreada.value = { ...key, ...response.data.data };
         showKeyResult.value = true;
       } catch (error) {
         console.error('Error renovando API Key:', error);
-        alert('Error al renovar API Key');
+        notificar.error('Error al renovar la API Key: ' + (error.response?.data?.error || error.message));
       }
     };
 
@@ -397,17 +397,17 @@ export default {
 
       try {
         await axios.delete(`/api/api-keys/${key.id}`);
-        alert('API Key revocada exitosamente');
+        notificar.exito('API Key revocada');
         listarApiKeys();
       } catch (error) {
         console.error('Error revocando API Key:', error);
-        alert('Error al revocar API Key');
+        notificar.error('Error al revocar la API Key: ' + (error.response?.data?.error || error.message));
       }
     };
 
     const copiarKey = () => {
       navigator.clipboard.writeText(keyCreada.value.key);
-      alert('API Key copiada al portapapeles');
+      notificar.exito('API Key copiada al portapapeles');
     };
 
     const formatDate = (dateString) => {

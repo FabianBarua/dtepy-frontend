@@ -392,7 +392,7 @@ export default {
         providers.value = response.data.data || [];
       } catch (error) {
         console.error('❌ Error cargando proveedores SMTP:', error);
-        mostrarSnackbar('Error cargando proveedores SMTP: ' + error.message, 'error');
+        mostrarSnackbar('Error cargando proveedores SMTP: ' + (error.response?.data?.error || error.response?.data?.message || error.message), 'error');
       } finally {
         cargando.value = false;
       }
@@ -439,10 +439,9 @@ export default {
     };
 
     const guardarProvider = async () => {
-      if (!formRef.value || !formularioValido.value) {
-        formRef.value?.validate();
-        return;
-      }
+      if (!formRef.value) return;
+      const { valid } = await formRef.value.validate();
+      if (!valid) return;
 
       guardando.value = true;
       try {

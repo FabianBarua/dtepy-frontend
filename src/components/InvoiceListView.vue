@@ -1,886 +1,591 @@
 <template>
   <v-container fluid>
-    <!-- Snackbar para mostrar el resultado de la consulta de estado -->
-    <v-snackbar
-      v-model="statusSnackbar"
-      :color="statusSnackbarColor"
-      :timeout="4000"
-      location="top"
-      class="text-center"
-    >
-      <v-icon :start="statusSnackbarIcon" size="large">{{ statusSnackbarIcon }}</v-icon>
-      {{ statusSnackbarText }}
-      <template v-slot:actions>
-        <v-btn variant="text" @click="statusSnackbar = false">Cerrar</v-btn>
-      </template>
-    </v-snackbar>
-
-    <!-- Diálogo de Confirmación para Reintentar Factura -->
-    <v-dialog v-model="retryDialog" max-width="400" persistent>
-      <v-card>
-        <v-card-title class="text-h5 d-flex align-center bg-warning text-white">
-          <v-icon start>mdi-reload</v-icon>
-          Reintentar Envío
-          <v-spacer></v-spacer>
-          <v-btn
-            icon="mdi-close"
-            size="small"
-            variant="text"
-            @click="retryDialog = false"
-            :disabled="retrying"
-            color="white"
-          ></v-btn>
-        </v-card-title>
-        <v-card-text class="mt-4">
-          <p class="text-body-1 mb-2">
-            ¿Estás seguro de reintentar el envío de esta factura?
-          </p>
-          <v-alert type="info" variant="tonal" icon="mdi-information" class="mb-2">
-            <strong>Factura:</strong> {{ retryInvoiceData?.correlativo }}
-          </v-alert>
-          <p class="text-body-2 text-medium-emphasis">
-            El sistema volverá a enviar el XML a SIFEN para actualizar el estado.
-          </p>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            color="grey"
-            variant="text"
-            @click="retryDialog = false"
-            :disabled="retrying"
-          >
-            Cancelar
-          </v-btn>
-          <v-btn
-            color="warning"
-            variant="tonal"
-            @click="executeRetryInvoice"
-            :loading="retrying"
-          >
-            <v-icon start>mdi-reload</v-icon>
-            Reintentar
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Diálogo de Confirmación para Eliminar Factura -->
-    <v-dialog v-model="deleteDialog" max-width="500" persistent>
-      <v-card>
-        <v-card-title class="text-h5 d-flex align-center" :class="deleteInvoiceEnLote ? 'bg-warning text-black' : 'error--text'">
-          <v-icon left :color="deleteInvoiceEnLote ? '' : 'error'">mdi-alert-circle</v-icon>
-          {{ deleteInvoiceEnLote ? 'Factura en Lote' : 'Confirmar Eliminación' }}
-        </v-card-title>
-        <v-card-text>
-          <v-alert
-            v-if="deleteInvoiceEnLote"
-            type="warning"
-            variant="tonal"
-            class="mb-4"
-          >
-            <strong>No se puede eliminar</strong> — esta factura pertenece a un lote de envío.
-            Debe eliminar la factura del lote antes de poder eliminarla.
-          </v-alert>
-          <v-alert v-else type="error" variant="tonal" class="mb-4">
-            <strong>⚠️ Atención:</strong> Esta acción NO se puede deshacer.
-          </v-alert>
-          <p v-if="!deleteInvoiceEnLote">¿Está seguro de que desea eliminar la siguiente factura?</p>
-          <v-card variant="outlined" class="pa-4 mt-3">
-            <p><strong>Correlativo:</strong> {{ deleteInvoiceData?.correlativo }}</p>
-            <p><strong>Cliente:</strong> {{ deleteInvoiceData?.cliente?.nombre }}</p>
-            <p><strong>Estado:</strong> {{ deleteInvoiceData?.estado }}</p>
-          </v-card>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            color="grey"
-            variant="text"
-            @click="deleteDialog = false"
-            :disabled="deleting"
-          >
-            {{ deleteInvoiceEnLote ? 'Cerrar' : 'Cancelar' }}
-          </v-btn>
-          <v-btn
-            v-if="!deleteInvoiceEnLote"
-            color="error"
-            variant="flat"
-            @click="executeDeleteInvoice"
-            :loading="deleting"
-          >
-            <v-icon left>mdi-delete</v-icon>
-            Eliminar
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <v-card>
-      <v-card-title class="d-flex align-center flex-wrap">
-        <h2>Lista de Facturas</h2>
-        <v-spacer></v-spacer>
-        
-        <div class="d-flex align-center" style="gap: 8px; width: 100%; max-width: 800px;">
-          <!-- Campo de búsqueda -->
-          <v-text-field
-            v-model="search"
-            prepend-inner-icon="mdi-magnify"
-            :label="`Buscar por ${searchTypeLabel}...`"
-            single-line
-            hide-details
-            clearable
-            style="max-width: 600px;"
-          ></v-text-field>
-          
-          <!-- Selector de tipo de búsqueda -->
-          <v-select
-            v-model="searchType"
-            :items="searchTypes"
-            label="Tipo"
-            single-line
-            hide-details
-            variant="outlined"
-            density="compact"
-            style="max-width: 130px;"
-          ></v-select>
-          
+      <!-- ===================== Cabecera y filtros ===================== -->
+      <v-card-title class="d-flex align-center flex-wrap ga-2">
+        <div class="d-flex align-center">
+          <v-icon start>mdi-file-document-multiple</v-icon>
+          <span class="text-h6">Documentos</span>
+          <v-chip class="ml-3" size="small" variant="tonal" color="primary">{{ total }} en total</v-chip>
         </div>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" prepend-icon="mdi-refresh" :loading="loading" @click="loadInvoices">Actualizar</v-btn>
+        <v-btn variant="tonal" color="primary" prepend-icon="mdi-file-excel" :loading="exportando" @click="exportarCsv">
+          Exportar CSV
+        </v-btn>
       </v-card-title>
 
-      <v-card-text>
-        <!-- Mensaje de no encontrado -->
-        <v-alert
-          v-if="!loading && filteredInvoices.length === 0 && search"
-          type="info"
-          variant="tonal"
-          icon="mdi-information"
-          class="mb-4"
-        >
-          <div class="text-body-1">
-            <strong>No se encontraron facturas</strong>
-          </div>
-          <div class="text-body-2 mt-1">
-            No hay facturas que coincidan con "{{ search }}" en {{ searchTypeLabel.toLowerCase() }}.
-          </div>
-        </v-alert>
+      <v-card-text class="pb-0">
+        <v-row dense>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="filtros.search"
+              prepend-inner-icon="mdi-magnify"
+              :label="`Buscar por ${searchTypeLabel}`"
+              variant="outlined" density="compact" hide-details clearable
+            ></v-text-field>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-select
+              v-model="filtros.searchType" :items="searchTypes" label="Campo"
+              variant="outlined" density="compact" hide-details
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="3">
+            <v-select
+              v-model="filtros.estado" :items="opcionesEstado" label="Estado" multiple chips closable-chips
+              variant="outlined" density="compact" hide-details clearable
+            ></v-select>
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="filtros.de" :items="tiposDE" label="Tipo de documento"
+              variant="outlined" density="compact" hide-details clearable
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field v-model="filtros.desde" type="date" label="Desde" variant="outlined" density="compact" hide-details clearable></v-text-field>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field v-model="filtros.hasta" type="date" label="Hasta" variant="outlined" density="compact" hide-details clearable></v-text-field>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-select
+              v-model="filtros.tipoEmision" :items="[{ title: 'Normal', value: 1 }, { title: 'Contingencia', value: 2 }]"
+              label="Emisión" variant="outlined" density="compact" hide-details clearable
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="2" class="d-flex align-center">
+            <v-btn variant="text" size="small" prepend-icon="mdi-filter-off" :disabled="!hayFiltros" @click="limpiarFiltros">Limpiar filtros</v-btn>
+          </v-col>
+          <v-col cols="12" md="4" class="d-flex align-center justify-end text-caption text-medium-emphasis">
+            <template v-if="empresaActiva">Filtrando por la empresa RUC {{ empresaActiva }}</template>
+            <template v-else>Todas las empresas</template>
+          </v-col>
+        </v-row>
+      </v-card-text>
 
-        <v-data-table
-          hide-default-footer
-          :headers="headers"
-          :items="filteredInvoices"
-          :loading="loading"
-          :items-per-page="itemsPerPage"
-          class="elevation-1"
-          :no-data-text="!search ? 'No hay facturas registradas' : 'No se encontraron facturas'"
-        >
-          <template v-slot:item._id="{ item }">
-            <a
-              href="#"
-              class="text-mono text-caption text-primary"
-              style="text-decoration: none; cursor: pointer;"
-              @click.prevent="viewInvoice(item._id)"
-              :title="`Ver detalle de ${item._id}`"
-            >
-              {{ item._id }}
-            </a>
-          </template>
+      <!-- ===================== Barra de acciones masivas ===================== -->
+      <v-expand-transition>
+        <div v-if="seleccion.length" class="mx-4 mt-3">
+          <v-sheet color="primary" variant="tonal" rounded class="pa-2 d-flex align-center flex-wrap ga-2">
+            <v-chip color="primary" variant="flat" size="small">{{ seleccion.length }} seleccionado{{ seleccion.length === 1 ? '' : 's' }}</v-chip>
 
-          <template v-slot:item.cliente.ruc="{ item }">
-            <span class="font-weight-medium">{{ item.cliente?.ruc || '-' }}</span>
-          </template>
-
-          <template v-slot:item.cdc="{ item }">
-            <span class="text-mono text-caption">{{ item.cdc || '-' }}</span>
-          </template>
-
-          <template v-slot:item.de="{ item }">
-            <v-chip size="small" variant="outlined" color="primary">
-              {{ item.de || 'Factura electrónica' }}
-            </v-chip>
-          </template>
-
-          <template v-slot:item.tipoEmision="{ item }">
-            <v-chip
-              :color="item.tipoEmision === 2 ? 'red' : 'green'"
-              size="x-small"
-              variant="flat"
-            >
-              {{ item.tipoEmision === 2 ? 'Contingencia' : 'Normal' }}
-            </v-chip>
-          </template>
-
-          <template v-slot:item.grupoLoteId="{ item }">
-            <router-link
-              v-if="item.grupoLoteId"
-              :to="`/lotes/${item.grupoLoteId}`"
-              class="text-primary text-caption text-decoration-none"
-            >
-              {{ item.grupoLoteId }}
-            </router-link>
-            <span v-else class="text-grey">-</span>
-          </template>
-
-          <template v-slot:item.estado="{ item }">
-            <v-chip
-              :color="getEstadoVisualColor(item.estadoVisual, item.codigoRetorno, item.estado)"
-              variant="flat"
-            >
-              {{ item.estado }}
-            </v-chip>
-          </template>
-
-          <template v-slot:item.proceso="{ item }">
-            <v-chip
-              :color="getProcesoColor(item.proceso)"
-              variant="flat"
-              size="small"
-            >
-              {{ getProcesoTexto(item.proceso) }}
-            </v-chip>
-          </template>
-
-          <template v-slot:item.total="{ item }">
-            Gs. {{ formatCurrency(item.total) }}
-          </template>
-          
-          <template v-slot:item.createdAt="{ item }">
-            {{ formatDate(item.createdAt) }}
-          </template>
-          
-          <template v-slot:item.actions="{ item }">
-            <v-menu v-model="item.menuOpen" :close-on-content-click="false" location="start">
-              <template v-slot:activator="{ props }">
-                <v-btn
-                  color="primary"
-                  size="small"
-                  variant="tonal"
-                  v-bind="props"
-                  title="Acciones"
-                >
-                  <v-icon>mdi-dots-vertical</v-icon>
+            <v-menu>
+              <template #activator="{ props }">
+                <v-btn v-bind="props" size="small" variant="flat" color="success" prepend-icon="mdi-download" append-icon="mdi-menu-down" :loading="ejecutando === 'zip'">
+                  Descargar
                 </v-btn>
               </template>
-              <v-list density="compact" min-width="200">
-                <v-list-item @click="downloadXml(item); item.menuOpen = false" :disabled="!item.xmlPath">
-                  <template v-slot:prepend>
-                    <v-icon color="success" size="small">mdi-file-xml-box</v-icon>
-                  </template>
-                  <v-list-item-title>Descargar XML</v-list-item-title>
-                </v-list-item>
-                <v-list-item @click="downloadPdf(item); item.menuOpen = false" :disabled="!item.kudePath">
-                  <template v-slot:prepend>
-                    <v-icon color="error" size="small">mdi-file-pdf-box</v-icon>
-                  </template>
-                  <v-list-item-title>Descargar PDF</v-list-item-title>
-                </v-list-item>
+              <v-list density="compact">
+                <v-list-item prepend-icon="mdi-file-xml-box" title="XML" subtitle="Solo los XML firmados" @click="descargarZip(['xml'])"></v-list-item>
+                <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF (KUDE)" subtitle="Solo los PDF" @click="descargarZip(['pdf'])"></v-list-item>
+                <v-list-item prepend-icon="mdi-folder-zip" title="XML + PDF" subtitle="Todo en un ZIP" @click="descargarZip(['xml', 'pdf'])"></v-list-item>
+              </v-list>
+            </v-menu>
+
+            <v-btn size="small" variant="flat" color="info" prepend-icon="mdi-cloud-sync" :loading="ejecutando === 'refresh'" :disabled="!!ejecutando" @click="consultarEstadoMasivo">
+              Consultar estado
+              <v-tooltip activator="parent" location="bottom">Pregunta a SET el estado de los documentos que no están en estado final</v-tooltip>
+            </v-btn>
+
+            <v-btn size="small" variant="flat" color="warning" prepend-icon="mdi-reload" :disabled="!!ejecutando || elegibles.reintento === 0" :loading="ejecutando === 'retry'" @click="confirmar('retry')">
+              Reintentar
+              <v-chip v-if="elegibles.reintento" size="x-small" class="ml-1" variant="flat">{{ elegibles.reintento }}</v-chip>
+            </v-btn>
+
+            <v-btn size="small" variant="flat" color="deep-orange" prepend-icon="mdi-cancel" :disabled="!!ejecutando || elegibles.cancelacion === 0" :loading="ejecutando === 'cancel'" @click="confirmar('cancel')">
+              Cancelar en SET
+              <v-chip v-if="elegibles.cancelacion" size="x-small" class="ml-1" variant="flat">{{ elegibles.cancelacion }}</v-chip>
+            </v-btn>
+
+            <v-btn size="small" variant="flat" color="error" prepend-icon="mdi-delete" :disabled="!!ejecutando || elegibles.eliminacion === 0" :loading="ejecutando === 'delete'" @click="confirmar('delete')">
+              Eliminar
+              <v-chip v-if="elegibles.eliminacion" size="x-small" class="ml-1" variant="flat">{{ elegibles.eliminacion }}</v-chip>
+            </v-btn>
+
+            <v-spacer></v-spacer>
+            <v-btn size="small" variant="text" prepend-icon="mdi-close" @click="seleccion = []">Quitar selección</v-btn>
+          </v-sheet>
+        </div>
+      </v-expand-transition>
+
+      <!-- ===================== Tabla ===================== -->
+      <v-card-text>
+        <v-data-table-server
+          v-model="seleccion"
+          v-model:items-per-page="itemsPerPage"
+          v-model:page="currentPage"
+          v-model:sort-by="sortBy"
+          :headers="headers"
+          :items="invoices"
+          :items-length="total"
+          :loading="loading"
+          item-value="_id"
+          show-select
+          :items-per-page-options="[10, 25, 50, 100, 200]"
+          items-per-page-text="Por página"
+          :no-data-text="hayFiltros ? 'No hay documentos que coincidan con los filtros' : 'No hay documentos registrados'"
+          loading-text="Cargando documentos..."
+          density="comfortable"
+          class="elevation-1"
+          @update:options="onOptions"
+        >
+          <template #item.fechaCreacion="{ item }">
+            <div class="text-no-wrap">{{ formatFechaHora(item.fechaCreacion) }}</div>
+            <div class="text-caption text-medium-emphasis">{{ hace(item.fechaCreacion) }}</div>
+          </template>
+
+          <template #item.correlativo="{ item }">
+            <router-link :to="`/invoices/${item._id}`" class="text-decoration-none font-weight-medium text-mono">{{ item.correlativo }}</router-link>
+            <div>
+              <v-chip size="x-small" variant="outlined" color="primary" label>{{ tipoCorto(item.de) }}</v-chip>
+              <v-chip v-if="item.tipoEmision === 2" size="x-small" color="red" variant="flat" class="ml-1" label>Contingencia</v-chip>
+            </div>
+          </template>
+
+          <template #item.cliente="{ item }">
+            <div class="text-truncate" style="max-width: 260px" :title="item.cliente?.nombre">{{ item.cliente?.nombre || '-' }}</div>
+            <div class="text-caption text-medium-emphasis">{{ item.cliente?.ruc || '' }}</div>
+          </template>
+
+          <template #item.total="{ item }">
+            <span class="text-no-wrap">{{ formatMonto(item.total, item.moneda) }}</span>
+            <div v-if="item.moneda && item.moneda !== 'PYG' && item.tipoCambio" class="text-caption text-medium-emphasis">TC {{ formatNumero(item.tipoCambio) }}</div>
+          </template>
+
+          <template #item.estado="{ item }">
+            <v-chip :color="estadoInfo(item.estado).color" variant="flat" size="small" :prepend-icon="estadoInfo(item.estado).icono">
+              {{ estadoInfo(item.estado).etiqueta }}
+              <v-tooltip v-if="item.codigoRetorno" activator="parent" location="top" max-width="420">
+                <strong>{{ item.codigoRetorno }}</strong> — {{ item.mensajeRetorno }}
+              </v-tooltip>
+            </v-chip>
+            <div v-if="item.codigoRetorno && item.estado !== 'aceptado'" class="text-caption text-medium-emphasis text-truncate" style="max-width: 220px">{{ item.codigoRetorno }} {{ item.mensajeRetorno }}</div>
+          </template>
+
+          <template #item.proceso="{ item }">
+            <v-icon :color="procesoInfo(item.proceso).color" size="small">{{ procesoInfo(item.proceso).icono }}</v-icon>
+            <v-tooltip activator="parent" location="top">{{ procesoInfo(item.proceso).etiqueta }}</v-tooltip>
+          </template>
+
+          <template #item.empresa="{ item }">
+            <span class="text-caption">{{ item.empresa?.nombre || item.rucEmpresa || '-' }}</span>
+          </template>
+
+          <template #item.actions="{ item }">
+            <v-menu>
+              <template #activator="{ props }">
+                <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text"></v-btn>
+              </template>
+              <v-list density="compact" min-width="230">
+                <v-list-item prepend-icon="mdi-eye" title="Ver detalle" @click="router.push(`/invoices/${item._id}`)"></v-list-item>
                 <v-divider></v-divider>
-                <v-list-item @click="refreshInvoiceStatus(item); item.menuOpen = false">
-                  <template v-slot:prepend>
-                    <v-icon color="info" size="small">mdi-refresh</v-icon>
-                  </template>
-                  <v-list-item-title>Consultar Estado</v-list-item-title>
-                </v-list-item>
-                <v-list-item @click="viewInvoice(item._id); item.menuOpen = false">
-                  <template v-slot:prepend>
-                    <v-icon color="primary" size="small">mdi-eye</v-icon>
-                  </template>
-                  <v-list-item-title>Ver Detalle</v-list-item-title>
-                </v-list-item>
+                <v-list-item prepend-icon="mdi-file-xml-box" title="Descargar XML" :disabled="!item.tieneXml" @click="descargarUno(item, 'xml')"></v-list-item>
+                <v-list-item prepend-icon="mdi-file-pdf-box" title="Descargar PDF" :disabled="!item.tienePdf" @click="descargarUno(item, 'pdf')"></v-list-item>
                 <v-divider></v-divider>
-                <v-list-item
-                  v-if="item.estado === 'error'"
-                  @click="confirmRetryInvoice(item); item.menuOpen = false"
-                >
-                  <template v-slot:prepend>
-                    <v-icon color="warning" size="small">mdi-reload</v-icon>
-                  </template>
-                  <v-list-item-title class="text-warning">Reintentar</v-list-item-title>
-                </v-list-item>
+                <v-list-item prepend-icon="mdi-cloud-sync" title="Consultar estado en SET" :disabled="!item.cdc" @click="consultarEstadoUno(item)"></v-list-item>
+                <v-list-item prepend-icon="mdi-reload" title="Reintentar emisión" :subtitle="item.elegibilidad?.reintento?.ok ? '' : item.elegibilidad?.reintento?.motivo" :disabled="!item.elegibilidad?.reintento?.ok" @click="confirmar('retry', [item._id])"></v-list-item>
+                <v-list-item prepend-icon="mdi-cancel" title="Cancelar en SET" :subtitle="item.elegibilidad?.cancelacion?.ok ? plazoTexto(item) : item.elegibilidad?.cancelacion?.motivo" :disabled="!item.elegibilidad?.cancelacion?.ok" @click="confirmar('cancel', [item._id])"></v-list-item>
                 <v-divider></v-divider>
-                <v-list-item @click="confirmDeleteInvoice(item); item.menuOpen = false">
-                  <template v-slot:prepend>
-                    <v-icon color="error" size="small">mdi-delete</v-icon>
-                  </template>
-                  <v-list-item-title class="text-error">Eliminar</v-list-item-title>
-                </v-list-item>
+                <v-list-item prepend-icon="mdi-delete" title="Eliminar" class="text-error" :subtitle="item.elegibilidad?.eliminacion?.ok ? '' : item.elegibilidad?.eliminacion?.motivo" :disabled="!item.elegibilidad?.eliminacion?.ok" @click="confirmar('delete', [item._id])"></v-list-item>
               </v-list>
             </v-menu>
           </template>
-        </v-data-table>
-        
-        <div class="d-flex align-center justify-center pt-4" style="gap: 16px;">
-          <div class="d-flex align-center" style="gap: 8px;">
-            <span class="text-body-2">Items por página:</span>
-            <v-select
-              v-model="itemsPerPage"
-              :items="[10, 25, 50, 100]"
-              density="compact"
-              variant="outlined"
-              hide-details
-              style="max-width: 80px;"
-            ></v-select>
-          </div>
-          <v-pagination
-            v-model="currentPage"
-            :length="totalPages"
-            @update:modelValue="changePage"
-          ></v-pagination>
-        </div>
+        </v-data-table-server>
       </v-card-text>
     </v-card>
+
+    <!-- ===================== Confirmación de acción masiva ===================== -->
+    <v-dialog v-model="dialogo.visible" max-width="560" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center" :class="`bg-${dialogo.color}`">
+          <v-icon start>{{ dialogo.icono }}</v-icon>
+          {{ dialogo.titulo }}
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <p class="mb-3">{{ dialogo.texto }}</p>
+          <v-alert v-if="dialogo.omitidos.length" type="warning" variant="tonal" density="compact" class="mb-3">
+            <div class="font-weight-medium mb-1">{{ dialogo.omitidos.length }} documento(s) se van a omitir:</div>
+            <div v-for="o in dialogo.omitidos.slice(0, 6)" :key="o.id" class="text-caption">• {{ o.correlativo }} — {{ o.motivo }}</div>
+            <div v-if="dialogo.omitidos.length > 6" class="text-caption">… y {{ dialogo.omitidos.length - 6 }} más</div>
+          </v-alert>
+          <template v-if="dialogo.accion === 'cancel'">
+            <v-alert type="error" variant="tonal" density="compact" class="mb-3">
+              <div class="font-weight-medium mb-1">Se van a cancelar en SET {{ dialogo.elegibles.length }} documento(s):</div>
+              <div v-for="c in dialogo.correlativos.slice(0, 8)" :key="c" class="text-caption text-mono">• {{ c }}</div>
+              <div v-if="dialogo.correlativos.length > 8" class="text-caption">… y {{ dialogo.correlativos.length - 8 }} más</div>
+            </v-alert>
+            <v-textarea
+              v-model="dialogo.motivo"
+              label="Motivo de la cancelación *"
+              variant="outlined" rows="3" counter="150" maxlength="150"
+              hint="Queda registrado en SET junto con el evento. Mínimo 5 caracteres."
+              persistent-hint
+              class="mb-2"
+            ></v-textarea>
+            <v-text-field
+              v-model="dialogo.confirmacion"
+              label="Escribí CANCELAR para confirmar *"
+              variant="outlined" density="compact"
+              hint="Una cancelación registrada en SET no se puede revertir."
+              persistent-hint
+              autocomplete="off"
+            ></v-text-field>
+          </template>
+          <v-alert v-if="dialogo.accion === 'delete'" type="error" variant="tonal" density="compact">
+            Solo se borran registros que nunca existieron en SET (rechazados o con error). Esta acción no se puede deshacer.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" :disabled="!!ejecutando" @click="dialogo.visible = false">Volver</v-btn>
+          <v-btn :color="dialogo.color" variant="flat" :loading="!!ejecutando" :disabled="dialogo.elegibles.length === 0 || (dialogo.accion === 'cancel' && (dialogo.motivo.trim().length < 5 || dialogo.confirmacion.trim().toUpperCase() !== 'CANCELAR'))" @click="ejecutarDialogo">
+            {{ dialogo.boton }} ({{ dialogo.elegibles.length }})
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ===================== Resultado de acción masiva ===================== -->
+    <v-dialog v-model="resultado.visible" max-width="720">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon start :color="resultado.fallidos ? 'warning' : 'success'">{{ resultado.fallidos ? 'mdi-alert' : 'mdi-check-circle' }}</v-icon>
+          {{ resultado.titulo }}
+          <v-spacer></v-spacer>
+          <v-chip size="small" color="success" variant="tonal" class="mr-1">{{ resultado.ok }} ok</v-chip>
+          <v-chip v-if="resultado.fallidos" size="small" color="error" variant="tonal">{{ resultado.fallidos }} con error</v-chip>
+        </v-card-title>
+        <v-card-text>
+          <v-table density="compact">
+            <thead>
+              <tr><th>Documento</th><th>Resultado</th><th>Detalle</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in resultado.filas" :key="r.id">
+                <td class="text-mono">{{ r.correlativo || r.id }}</td>
+                <td>
+                  <v-icon :color="r.ok ? 'success' : 'error'" size="small">{{ r.ok ? 'mdi-check' : 'mdi-close' }}</v-icon>
+                  <span v-if="r.estadoActual" class="ml-1 text-caption">{{ r.estadoAnterior && r.cambio ? `${r.estadoAnterior} → ` : '' }}{{ r.estadoActual }}</span>
+                </td>
+                <td class="text-caption">{{ r.mensaje }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="flat" color="primary" @click="resultado.visible = false">Cerrar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { useEmpresaActiva } from '../composables/useEmpresaActiva';
+import { notificar } from '../composables/useNotificaciones';
+import { formatMonto, formatNumero, formatFechaHora, hace, estadoInfo, procesoInfo, tipoCorto, OPCIONES_ESTADO, TIPOS_DE } from '../utils/formato';
+import { descargarGet, descargarPost, mensajeDeErrorBlob } from '../utils/descargas';
+import { mensajeDeError } from '../utils/errores';
+
+const SEARCH_TYPES = [
+  { title: 'Todo', value: 'auto' },
+  { title: 'Número', value: 'correlativo' },
+  { title: 'CDC', value: 'cdc' },
+  { title: 'RUC cliente', value: 'ruc' },
+  { title: 'Cliente', value: 'nombre' },
+  { title: 'ID', value: 'id' }
+];
+
+const SORT_KEYS = { fechaCreacion: 'fecha', correlativo: 'correlativo', total: 'total', estado: 'estado', cliente: 'cliente' };
 
 export default {
   name: 'InvoiceListView',
   setup() {
-    const invoices = ref([]);
-    const loading = ref(true);
-    const search = ref('');
-    const searchType = ref('ruc');
-    const currentPage = ref(1);
-    const totalPages = ref(1);
-    const itemsPerPage = ref(10);
-    const totalItems = ref(0);
-    const statusSnackbar = ref(false);
-    const statusSnackbarText = ref('');
-    const statusSnackbarColor = ref('info');
-    const statusSnackbarIcon = ref('mdi-information');
-    const retryDialog = ref(false);
-    const retrying = ref(false);
-    const retryInvoiceData = ref(null);
-    const deleteDialog = ref(false);
-    const deleting = ref(false);
-    const deleteInvoiceData = ref(null);
-    const deleteInvoiceEnLote = computed(() => {
-      return deleteInvoiceData.value?.grupoLoteId != null;
-    });
     const route = useRoute();
     const router = useRouter();
+    const { empresaActiva, sincronizarDesdeQuery } = useEmpresaActiva();
 
-    const searchTypes = [
-      { title: 'RUC', value: 'ruc' },
-      { title: 'Nombre', value: 'nombre' },
-      { title: 'CDC', value: 'cdc' },
-      { title: 'Tipo', value: 'tipo' },
-      { title: 'ID', value: 'id' }
+    const invoices = ref([]);
+    const total = ref(0);
+    const loading = ref(false);
+    const exportando = ref(false);
+    const currentPage = ref(1);
+    const itemsPerPage = ref(25);
+    const sortBy = ref([{ key: 'fechaCreacion', order: 'desc' }]);
+    const seleccion = ref([]);
+    const ejecutando = ref(null); // 'zip' | 'refresh' | 'retry' | 'cancel' | 'delete' | null
+
+    const filtros = reactive({ search: '', searchType: 'auto', estado: [], de: null, desde: '', hasta: '', tipoEmision: null });
+
+    const headers = [
+      { title: 'Fecha', key: 'fechaCreacion', width: 150 },
+      { title: 'Número', key: 'correlativo', width: 160 },
+      { title: 'Cliente', key: 'cliente', sortable: true },
+      { title: 'Total', key: 'total', align: 'end', width: 150 },
+      { title: 'Estado', key: 'estado', width: 170 },
+      { title: '', key: 'proceso', sortable: false, width: 40, align: 'center' },
+      { title: 'Empresa', key: 'empresa', sortable: false, width: 140 },
+      { title: '', key: 'actions', sortable: false, width: 56, align: 'end' }
     ];
 
-    const empresaActiva = ref(null);
+    const searchTypeLabel = computed(() => SEARCH_TYPES.find(t => t.value === filtros.searchType)?.title.toLowerCase() || 'todo');
+    const hayFiltros = computed(() => Boolean(filtros.search || filtros.estado.length || filtros.de || filtros.desde || filtros.hasta || filtros.tipoEmision));
 
-    // Sincronizar con localStorage
-    const cargarEmpresaLocalStorage = () => {
-      const guardada = localStorage.getItem('filtro-empresa');
-      if (guardada) {
-        empresaActiva.value = guardada;
-      }
+    // ---------------- Carga ----------------
+    const paramsActuales = () => {
+      const p = new URLSearchParams();
+      p.set('page', currentPage.value);
+      p.set('limit', itemsPerPage.value);
+      if (filtros.search) { p.set('search', filtros.search); p.set('searchType', filtros.searchType); }
+      if (filtros.estado.length) p.set('estado', filtros.estado.join(','));
+      if (filtros.de) p.set('de', filtros.de);
+      if (filtros.desde) p.set('desde', filtros.desde);
+      if (filtros.hasta) p.set('hasta', filtros.hasta);
+      if (filtros.tipoEmision) p.set('tipoEmision', filtros.tipoEmision);
+      if (empresaActiva.value) p.set('rucEmpresa', empresaActiva.value);
+      const orden = sortBy.value?.[0];
+      if (orden && SORT_KEYS[orden.key]) { p.set('sort', SORT_KEYS[orden.key]); p.set('dir', orden.order === 'asc' ? 'asc' : 'desc'); }
+      return p;
     };
 
-    // Escuchar cambios en localStorage desde otras pestañas/ventanas
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'empresaActiva') {
-        const guardada = e.newValue;
-        empresaActiva.value = (guardada && guardada !== 'all' && guardada !== 'null') ? guardada : null;
-      }
-    });
-
-// Cargar filtros desde la URL al montar
-    onMounted(() => {
-      const query = route.query;
-      // Priorizar URL params sobre localStorage
-      if (query.empresa) {
-        empresaActiva.value = query.empresa;
-      } else {
-        // Si no hay en URL, cargar desde localStorage
-        const guardada = localStorage.getItem('empresaActiva');
-        empresaActiva.value = (guardada && guardada !== 'all' && guardada !== 'null') ? guardada : null;
-      }
-      if (query.search) search.value = query.search;
-      if (query.searchType) searchType.value = query.searchType;
-      if (query.page) currentPage.value = parseInt(query.page);
-      loadInvoices();
-    });
-
-    // Actualizar URL cuando cambian los filtros
-    const updateUrl = () => {
-      const query = {};
-      if (search.value) query.search = search.value;
-      if (searchType.value) query.searchType = searchType.value;
-      if (empresaActiva.value) query.empresa = empresaActiva.value;
-      if (currentPage.value > 1) query.page = currentPage.value;
-      router.replace({ query }).catch(() => {});
-    };
-
-    // Watch para cambios en filtros - con debounce para evitar recargas excesivas
-    let searchTimeout = null;
-    
-    watch(search, () => {
-      if (searchTimeout) clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        currentPage.value = 1;
-        updateUrl();
-        loadInvoices();
-      }, 300);
-    });
-
-    watch(searchType, () => {
-      currentPage.value = 1;
-      updateUrl();
-      loadInvoices();
-    });
-
-    watch(empresaActiva, () => {
-      currentPage.value = 1;
-      updateUrl();
-      loadInvoices();
-    }, { immediate: false });
-
-    watch(currentPage, () => {
-      updateUrl();
-      loadInvoices();
-    });
-
-    // Escuchar cambios de empresa desde el header (URL)
-    watch(() => route.query.empresa, (newEmpresa) => {
-      // Si es "all" o null, no filtrar por empresa
-      empresaActiva.value = (newEmpresa && newEmpresa !== 'all' && newEmpresa !== 'null') ? newEmpresa : null;
-    });
-
-    const searchTypeLabel = computed(() => {
-      const type = searchTypes.find(t => t.value === searchType.value);
-      return type?.title || 'RUC';
-    });
-
-    // Propiedad computada para filtrar las facturas
-    const filteredInvoices = computed(() => invoices.value);
-
-     const headers = [
-        { title: 'Fecha', key: 'createdAt' },
-        { title: 'ID', key: '_id', sortable: false },
-        { title: 'Tipo DE', key: 'de' },
-        { title: 'Estado SIFEN', key: 'estado' },
-        // { title: 'RUC', key: 'cliente.ruc' },
-        // { title: 'Cliente', key: 'cliente.nombre' },
-        // { title: 'CDC', key: 'cdc' },
-        { title: 'Emisión', key: 'tipoEmision' },
-        { title: 'Lote', key: 'grupoLoteId' },
-        { title: 'Acciones', key: 'actions', sortable: false }
-      ];
-
-    const getStatusColor = (status) => {
-      switch(status) {
-        case 'enviado':
-        case 'aceptado':
-          return 'success';
-        case 'procesando':
-          return 'warning';
-        case 'error':
-        case 'rechazado':
-          return 'error';
-        default:
-          return 'info';
-      }
-    };
-
-    // Función para determinar el estado visual según código de retorno SIFEN v150
-    // Retorna: 'aceptado', 'observado', 'rechazado' o 'error'
-    const getEstadoVisual = (estadoVisual, codigoRetorno, estado) => {
-      if (estadoVisual) {
-        return estadoVisual;
-      }
-
-      if (estado === 'aceptado' || estado === 'enviado') {
-        return 'aceptado';
-      }
-      if (estado === 'observado' || estado === 'procesando' || estado === 'encolado') {
-        return 'observado';
-      }
-      if (estado === 'error') {
-        return 'error';
-      }
-      return 'rechazado';
-    };
-
-    // Función para obtener el color del estado visual
-    const getEstadoVisualColor = (estadoVisual, codigoRetorno, estado) => {
-      const visual = getEstadoVisual(estadoVisual, codigoRetorno, estado);
-      switch(visual) {
-        case 'aceptado':
-          return 'success';  // Verde
-        case 'observado':
-          return 'amber';    // Amarillo
-        case 'rechazado':
-          return 'error';    // Rojo
-        case 'error':
-          return 'error';    // Rojo - Error de conexión
-        default:
-          return 'info';
-      }
-    };
-
-    // Funciones para el campo proceso
-    const getProcesoColor = (proceso) => {
-      if (proceso === 'Completado') {
-        return 'success';  // Verde - XML y PDF generados
-      } else if (proceso === 'No completado') {
-        return 'error';    // Rojo - Error en generación
-      } else {
-        return 'warning';  // Amarillo - En proceso (null)
-      }
-    };
-
-    const getProcesoTexto = (proceso) => {
-      if (proceso === 'Completado') {
-        return '✅ Completado';
-      } else if (proceso === 'No completado') {
-        return '❌ No completado';
-      } else {
-        return '⏳ Pendiente';
-      }
-    };
-
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('es-PY').format(amount);
-    };
-    
-const formatDate = (dateString) => {
-  const date = new Date(dateString);
-  return date.toLocaleString('es-PY');
-};
-    
-    const viewInvoice = (id) => {
-      window.location.href = `/invoices/${id}`;
-    };
-
-    const verLote = (id) => {
-      window.location.href = `/lotes/${id}`;
-    };
-
-    const downloadXml = async (invoice) => {
-      if (!invoice.xmlPath) {
-        alert('⚠️ XML no disponible para esta factura');
-        return;
-      }
-
-      try {
-        // Crear un blob con la respuesta
-        const response = await axios.get(`/api/invoices/${invoice._id}/download-xml`, {
-          responseType: 'blob'
-        });
-
-        // Crear URL del blob
-        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/xml' }));
-        
-        // Crear enlace temporal para descargar
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${invoice.xmlPath.split('/').pop()}`);
-        document.body.appendChild(link);
-        link.click();
-        
-        // Limpiar
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        // Mostrar mensaje de éxito
-        statusSnackbarText.value = `✅ XML descargado: ${invoice.correlativo}`;
-        statusSnackbarColor.value = 'success';
-        statusSnackbarIcon.value = 'mdi-check-circle';
-        statusSnackbar.value = true;
-      } catch (error) {
-        console.error('Error descargando XML:', error);
-        statusSnackbarText.value = `❌ Error al descargar XML: ${invoice.correlativo}`;
-        statusSnackbarColor.value = 'error';
-        statusSnackbarIcon.value = 'mdi-alert-circle';
-        statusSnackbar.value = true;
-      }
-    };
-
-    const downloadPdf = async (invoice) => {
-      if (!invoice.kudePath) {
-        alert('⚠️ PDF no disponible para esta factura');
-        return;
-      }
-
-      try {
-        // Crear un blob con la respuesta
-        const response = await axios.get(`/api/invoices/${invoice._id}/download-pdf`, {
-          responseType: 'blob'
-        });
-
-        // Crear URL del blob
-        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-        
-        // Crear enlace temporal para descargar
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${invoice.kudePath.split('/').pop()}`);
-        document.body.appendChild(link);
-        link.click();
-        
-        // Limpiar
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        // Mostrar mensaje de éxito
-        statusSnackbarText.value = `✅ PDF descargado: ${invoice.correlativo}`;
-        statusSnackbarColor.value = 'success';
-        statusSnackbarIcon.value = 'mdi-check-circle';
-        statusSnackbar.value = true;
-      } catch (error) {
-        console.error('Error descargando PDF:', error);
-        statusSnackbarText.value = `❌ Error al descargar PDF: ${invoice.correlativo}`;
-        statusSnackbarColor.value = 'error';
-        statusSnackbarIcon.value = 'mdi-alert-circle';
-        statusSnackbar.value = true;
-      }
-    };
-
-    const refreshInvoiceStatus = async (invoice) => {
-      invoice.refreshing = true;
-      try {
-        // Registrar el inicio de la consulta en consola (el backend guardará el log en BD)
-        console.log(`📋 Consultando estado de factura: ${invoice.correlativo} (ID: ${invoice._id})`);
-
-        const response = await axios.post(`/api/invoices/${invoice._id}/refresh-status`);
-
-        // Verificar si es estado final (no se consultó SET)
-        if (response.data.esEstadoFinal && !response.data.consultoSET) {
-          const estadoData = response.data.data;
-          const color = estadoData.estadoVisual === 'aceptado' ? 'success' :
-                        estadoData.estadoVisual === 'error' ? 'error' :
-                        estadoData.estadoVisual === 'rechazado' ? 'error' : 'warning';
-          const icono = 'mdi-check-circle';
-          statusSnackbarText.value = `✅ ${invoice.correlativo}: Estado final (${estadoData.estado}) - No se consultó SET`;
-          statusSnackbarColor.value = color;
-          statusSnackbarIcon.value = icono;
-          statusSnackbar.value = true;
-          return;
-        }
-
-        if (response.data.estadoCambio) {
-          statusSnackbarText.value = `✅ ${invoice.correlativo}: ${response.data.estadoAnterior} → ${response.data.estadoActual}`;
-          statusSnackbarColor.value = 'success';
-          statusSnackbarIcon.value = 'mdi-check-circle';
-          statusSnackbar.value = true;
-          loadInvoices();
-        } else {
-          // Mensaje más descriptivo según el estado actual
-          const estadoActual = response.data.estadoActual;
-          let mensajeEstado = '';
-          let color = 'info';
-          let icono = 'mdi-information';
-
-          switch(estadoActual) {
-            case 'procesando':
-              mensajeEstado = `⏳ ${invoice.correlativo}: Procesando en SIFEN`;
-              color = 'warning';
-              icono = 'mdi-timer-sand';
-              break;
-            case 'aceptado':
-              mensajeEstado = `✅ ${invoice.correlativo}: Aprobada por SIFEN`;
-              color = 'success';
-              icono = 'mdi-check-circle';
-              break;
-            case 'rechazado':
-              mensajeEstado = `❌ ${invoice.correlativo}: Rechazada por SIFEN`;
-              color = 'error';
-              icono = 'mdi-alert-circle';
-              break;
-            case 'enviado':
-              mensajeEstado = `📤 ${invoice.correlativo}: Enviada a SIFEN`;
-              color = 'info';
-              icono = 'mdi-send';
-              break;
-            default:
-              mensajeEstado = `ℹ️ ${invoice.correlativo}: ${estadoActual}`;
-          }
-
-          statusSnackbarText.value = mensajeEstado;
-          statusSnackbarColor.value = color;
-          statusSnackbarIcon.value = icono;
-          statusSnackbar.value = true;
-        }
-      } catch (error) {
-        console.error('Error al consultar estado:', error);
-
-        // Determinar el mensaje de error según el tipo de error
-        let errorMessage = `❌ Error al consultar ${invoice.correlativo}`;
-
-        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-          errorMessage = `⏱️ Timeout: El servidor no respondió a tiempo`;
-        } else if (error.response?.status === 500) {
-          // Error del servidor (ej: SET no responde)
-          const backendError = error.response?.data;
-          if (backendError?.message?.includes('SET')) {
-            errorMessage = `🔌 Error de conexión con SET: ${backendError.message}`;
-          } else {
-            errorMessage = `❌ Error del servidor: ${backendError?.message || error.message}`;
-          }
-        } else if (!error.response && error.request) {
-          // La solicitud se envió pero no se recibió respuesta
-          errorMessage = `🔌 Sin respuesta del servidor. Verifique que el backend esté en ejecución.`;
-        } else if (error.message) {
-          errorMessage = `❌ Error: ${error.message}`;
-        }
-        
-        statusSnackbarText.value = errorMessage;
-        statusSnackbarColor.value = 'error';
-        statusSnackbarIcon.value = 'mdi-alert-circle';
-        statusSnackbar.value = true;
-        
-        // Recargar la lista para mostrar el estado actualizado (posiblemente 'error')
-        loadInvoices();
-      } finally {
-        invoice.refreshing = false;
-      }
-    };
-
-    const confirmRetryInvoice = (invoice) => {
-      retryInvoiceData.value = invoice;
-      retryDialog.value = true;
-    };
-
-    const executeRetryInvoice = async () => {
-      if (!retryInvoiceData.value) return;
-      
-      retrying.value = true;
-      try {
-        await axios.post(`/api/invoices/${retryInvoiceData.value._id}/retry`);
-        statusSnackbarText.value = `✅ Reintento de envío iniciado: ${retryInvoiceData.value.correlativo}`;
-        statusSnackbarColor.value = 'success';
-        statusSnackbarIcon.value = 'mdi-check-circle';
-        statusSnackbar.value = true;
-        retryDialog.value = false;
-        retryInvoiceData.value = null;
-        loadInvoices();
-      } catch (error) {
-        console.error('Error reintentando factura:', error);
-        statusSnackbarText.value = `❌ Error al reintentar el envío: ${retryInvoiceData.value.correlativo}`;
-        statusSnackbarColor.value = 'error';
-        statusSnackbarIcon.value = 'mdi-alert-circle';
-        statusSnackbar.value = true;
-        retryDialog.value = false;
-        retryInvoiceData.value = null;
-      } finally {
-        retrying.value = false;
-      }
-    };
-
-    const confirmDeleteInvoice = (invoice) => {
-      deleteInvoiceData.value = invoice;
-      deleteDialog.value = true;
-    };
-
-    const executeDeleteInvoice = async () => {
-      if (!deleteInvoiceData.value) return;
-
-      deleting.value = true;
-      try {
-        await axios.delete(`/api/invoices/${deleteInvoiceData.value._id}`);
-        statusSnackbarText.value = `✅ Factura eliminada: ${deleteInvoiceData.value.correlativo}`;
-        statusSnackbarColor.value = 'success';
-        statusSnackbarIcon.value = 'mdi-check-circle';
-        statusSnackbar.value = true;
-        deleteDialog.value = false;
-        deleteInvoiceData.value = null;
-        loadInvoices();
-      } catch (error) {
-        console.error('Error eliminando factura:', error);
-        statusSnackbarText.value = `❌ Error al eliminar: ${deleteInvoiceData.value.correlativo}`;
-        statusSnackbarColor.value = 'error';
-        statusSnackbarIcon.value = 'mdi-alert-circle';
-        statusSnackbar.value = true;
-        deleteDialog.value = false;
-        deleteInvoiceData.value = null;
-      } finally {
-        deleting.value = false;
-      }
-    };
-
-    const changePage = (page) => {
-      currentPage.value = page;
-    };
-
-    watch(itemsPerPage, () => {
-      currentPage.value = 1;
-      loadInvoices();
-    });
-
+    let peticion = 0;
     const loadInvoices = async () => {
+      const mia = ++peticion;
       loading.value = true;
       try {
-        const params = new URLSearchParams();
-        params.append('page', currentPage.value);
-        params.append('limit', itemsPerPage.value);
-        if (search.value) params.append('search', search.value);
-        if (searchType.value) params.append('searchType', searchType.value);
-        if (empresaActiva.value) {
-          params.append('rucEmpresa', empresaActiva.value);
+        const { data } = await axios.get(`/api/invoices?${paramsActuales()}`);
+        if (mia !== peticion) return; // llegó una respuesta más nueva
+        invoices.value = data.invoices || [];
+        total.value = data.total || 0;
+        // si la página quedó vacía (p.ej. tras borrar), volver a la última
+        if (invoices.value.length === 0 && currentPage.value > 1 && total.value > 0) {
+          currentPage.value = Math.max(1, Math.ceil(total.value / itemsPerPage.value));
         }
-        const response = await axios.get(`/api/invoices?${params.toString()}`);
-        invoices.value = response.data.invoices;
-        totalPages.value = response.data.totalPages;
-        totalItems.value = response.data.total;
       } catch (error) {
-        console.error('Error cargando facturas:', error);
+        notificar.error(`No se pudieron cargar los documentos: ${mensajeDeError(error)}`);
       } finally {
-        loading.value = false;
+        if (mia === peticion) loading.value = false;
       }
     };
 
-    onMounted(() => {
+    // La tabla server-side avisa página/orden/tamaño por acá. Vuetify lo emite
+    // dos veces al montar (una por cada v-model que sincroniza): se ignora el eco.
+    let ultimasOpciones = '';
+    const onOptions = (opciones) => {
+      const firma = JSON.stringify({ p: opciones?.page, n: opciones?.itemsPerPage, s: opciones?.sortBy });
+      if (firma === ultimasOpciones) return;
+      ultimasOpciones = firma;
+      actualizarUrl();
       loadInvoices();
+    };
+
+    // ---------------- URL <-> filtros ----------------
+    const actualizarUrl = () => {
+      const q = {};
+      if (filtros.search) { q.search = filtros.search; q.searchType = filtros.searchType; }
+      if (filtros.estado.length) q.estado = filtros.estado.join(',');
+      if (filtros.de) q.de = filtros.de;
+      if (filtros.desde) q.desde = filtros.desde;
+      if (filtros.hasta) q.hasta = filtros.hasta;
+      if (filtros.tipoEmision) q.tipoEmision = filtros.tipoEmision;
+      if (empresaActiva.value) q.empresa = empresaActiva.value;
+      if (currentPage.value > 1) q.page = currentPage.value;
+      if (itemsPerPage.value !== 25) q.limit = itemsPerPage.value;
+      const orden = sortBy.value?.[0];
+      if (orden && !(orden.key === 'fechaCreacion' && orden.order === 'desc')) { q.sort = orden.key; q.dir = orden.order; }
+      router.replace({ query: q }).catch(() => {});
+    };
+
+    const leerUrl = () => {
+      const q = route.query;
+      sincronizarDesdeQuery(q);
+      filtros.search = q.search || '';
+      filtros.searchType = q.searchType || 'auto';
+      filtros.estado = q.estado ? String(q.estado).split(',') : [];
+      filtros.de = q.de || null;
+      filtros.desde = q.desde || '';
+      filtros.hasta = q.hasta || '';
+      filtros.tipoEmision = q.tipoEmision ? Number(q.tipoEmision) : null;
+      currentPage.value = parseInt(q.page) || 1;
+      itemsPerPage.value = parseInt(q.limit) || 25;
+      if (q.sort) sortBy.value = [{ key: q.sort, order: q.dir === 'asc' ? 'asc' : 'desc' }];
+    };
+    // Se lee ANTES de registrar los watchers: así la carga inicial la dispara
+    // solo la tabla (update:options) y no cada filtro que se acaba de asignar.
+    leerUrl();
+
+    let debounce = null;
+    watch(() => filtros.search, () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => { currentPage.value = 1; actualizarUrl(); loadInvoices(); }, 350);
     });
+    watch(() => [filtros.searchType, filtros.estado, filtros.de, filtros.desde, filtros.hasta, filtros.tipoEmision], () => {
+      currentPage.value = 1; actualizarUrl(); loadInvoices();
+    }, { deep: true });
+    watch(empresaActiva, () => { currentPage.value = 1; seleccion.value = []; actualizarUrl(); loadInvoices(); });
+
+    const limpiarFiltros = () => {
+      Object.assign(filtros, { search: '', searchType: 'auto', estado: [], de: null, desde: '', hasta: '', tipoEmision: null });
+    };
+
+    onMounted(() => { /* la tabla dispara update:options al montar y carga */ });
+
+    // ---------------- Elegibilidad de la selección ----------------
+    const seleccionados = computed(() => {
+      const ids = new Set(seleccion.value);
+      return invoices.value.filter(i => ids.has(i._id));
+    });
+    const elegibles = computed(() => ({
+      reintento: seleccionados.value.filter(i => i.elegibilidad?.reintento?.ok).length,
+      cancelacion: seleccionados.value.filter(i => i.elegibilidad?.cancelacion?.ok).length,
+      eliminacion: seleccionados.value.filter(i => i.elegibilidad?.eliminacion?.ok).length
+    }));
+
+    const plazoTexto = (item) => {
+      const h = item.elegibilidad?.cancelacion?.horasRestantes;
+      if (h === undefined) return '';
+      return h < 1 ? `Quedan ${Math.round(h * 60)} min de plazo` : `Quedan ${Math.floor(h)} h de plazo`;
+    };
+
+    // ---------------- Descargas ----------------
+    const descargarUno = async (item, tipo) => {
+      try {
+        await descargarGet(`/api/invoices/${item._id}/download-${tipo}`, `${item.correlativo}.${tipo}`);
+        notificar.exito(`${tipo.toUpperCase()} descargado: ${item.correlativo}`);
+      } catch (error) {
+        notificar.error(`No se pudo descargar el ${tipo.toUpperCase()}: ${await mensajeDeErrorBlob(error)}`);
+      }
+    };
+
+    const descargarZip = async (incluir) => {
+      if (!seleccion.value.length) return;
+      ejecutando.value = 'zip';
+      try {
+        const nombre = await descargarPost('/api/invoices/bulk/zip', { ids: seleccion.value, incluir }, 'documentos.zip');
+        notificar.exito(`ZIP generado: ${nombre}`);
+      } catch (error) {
+        notificar.error(`No se pudo generar el ZIP: ${await mensajeDeErrorBlob(error)}`);
+      } finally {
+        ejecutando.value = null;
+      }
+    };
+
+    const exportarCsv = async () => {
+      exportando.value = true;
+      try {
+        const p = paramsActuales(); p.delete('page'); p.delete('limit');
+        const nombre = await descargarGet(`/api/invoices/export.csv?${p}`, 'documentos.csv');
+        notificar.exito(`CSV exportado: ${nombre}`);
+      } catch (error) {
+        notificar.error(`No se pudo exportar: ${await mensajeDeErrorBlob(error)}`);
+      } finally {
+        exportando.value = false;
+      }
+    };
+
+    // ---------------- Acciones masivas ----------------
+    const resultado = reactive({ visible: false, titulo: '', ok: 0, fallidos: 0, filas: [] });
+    const mostrarResultado = (titulo, data) => {
+      resultado.titulo = titulo;
+      resultado.ok = data.ok || 0;
+      resultado.fallidos = data.fallidos || 0;
+      resultado.filas = data.resultados || [];
+      resultado.visible = true;
+    };
+
+    const consultarEstadoUno = async (item) => {
+      try {
+        const { data } = await axios.post(`/api/invoices/${item._id}/refresh-status`);
+        if (data.estadoCambio) notificar.exito(`${item.correlativo}: ${data.estadoAnterior} → ${data.estadoActual}`);
+        else if (!data.consultoSET) notificar.info(`${item.correlativo}: estado final (${data.estadoActual}), no hace falta consultar a SET`);
+        else notificar.info(`${item.correlativo}: sin cambios (${data.estadoActual})`);
+        loadInvoices();
+      } catch (error) {
+        notificar.error(`${item.correlativo}: ${mensajeDeError(error)}`);
+        loadInvoices();
+      }
+    };
+
+    const consultarEstadoMasivo = async () => {
+      ejecutando.value = 'refresh';
+      try {
+        const { data } = await axios.post('/api/invoices/bulk/refresh-status', { ids: seleccion.value });
+        mostrarResultado('Consulta de estado en SET', data);
+        loadInvoices();
+      } catch (error) {
+        notificar.error(mensajeDeError(error));
+      } finally {
+        ejecutando.value = null;
+      }
+    };
+
+    const dialogo = reactive({ visible: false, accion: null, titulo: '', texto: '', boton: '', color: 'primary', icono: '', motivo: '', confirmacion: '', elegibles: [], correlativos: [], omitidos: [] });
+
+    const DEFINICIONES = {
+      retry: { titulo: 'Reintentar emisión', boton: 'Reintentar', color: 'warning', icono: 'mdi-reload', clave: 'reintento',
+        texto: 'Se vuelve a generar y firmar cada documento con los datos guardados y se envía a SET por el canal configurado. Conservan su numeración.' },
+      cancel: { titulo: 'Cancelar en SET', boton: 'Cancelar documentos', color: 'deep-orange', icono: 'mdi-cancel', clave: 'cancelacion',
+        texto: 'Se registra en SET un evento de cancelación por cada documento. Es irreversible: un documento cancelado no vuelve a estar vigente.' },
+      delete: { titulo: 'Eliminar registros', boton: 'Eliminar', color: 'error', icono: 'mdi-delete', clave: 'eliminacion',
+        texto: 'Se borran de este sistema los registros seleccionados que nunca existieron en SET.' }
+    };
+
+    const confirmar = (accion, ids = null) => {
+      const def = DEFINICIONES[accion];
+      const lista = ids || seleccion.value;
+      const docs = invoices.value.filter(i => lista.includes(i._id));
+      dialogo.accion = accion;
+      dialogo.titulo = def.titulo; dialogo.texto = def.texto; dialogo.boton = def.boton; dialogo.color = def.color; dialogo.icono = def.icono;
+      dialogo.motivo = '';
+      dialogo.confirmacion = '';
+      const elegiblesDocs = docs.filter(i => i.elegibilidad?.[def.clave]?.ok);
+      dialogo.elegibles = elegiblesDocs.map(i => i._id);
+      dialogo.correlativos = elegiblesDocs.map(i => `${i.correlativo} · ${tipoCorto(i.de)} · ${formatMonto(i.total, i.moneda)}`);
+      dialogo.omitidos = docs.filter(i => !i.elegibilidad?.[def.clave]?.ok).map(i => ({ id: i._id, correlativo: i.correlativo, motivo: i.elegibilidad?.[def.clave]?.motivo || 'No elegible' }));
+      dialogo.visible = true;
+    };
+
+    const ejecutarDialogo = async () => {
+      const accion = dialogo.accion;
+      ejecutando.value = accion;
+      try {
+        let data;
+        if (accion === 'retry') ({ data } = await axios.post('/api/invoices/bulk/retry', { ids: dialogo.elegibles }));
+        else if (accion === 'delete') ({ data } = await axios.post('/api/invoices/bulk/delete', { ids: dialogo.elegibles }));
+        else if (accion === 'cancel') ({ data } = await axios.post('/api/eventos/bulk/cancelar', { ids: dialogo.elegibles, descripcion: dialogo.motivo.trim() }));
+        dialogo.visible = false;
+        mostrarResultado(DEFINICIONES[accion].titulo, data);
+        if (accion === 'delete') seleccion.value = seleccion.value.filter(id => !dialogo.elegibles.includes(id));
+        loadInvoices();
+      } catch (error) {
+        notificar.error(mensajeDeError(error));
+      } finally {
+        ejecutando.value = null;
+      }
+    };
 
     return {
-      invoices,
-      loading,
-      search,
-      searchType,
-      searchTypes,
-      searchTypeLabel,
-      filteredInvoices,
-      currentPage,
-      totalPages,
-      totalItems,
-      itemsPerPage,
-      headers,
-      getStatusColor,
-      getEstadoVisual,
-      getEstadoVisualColor,
-      getProcesoColor,
-      getProcesoTexto,
-      formatCurrency,
-      formatDate,
-      viewInvoice,
-      verLote,
-      downloadXml,
-      downloadPdf,
-      refreshInvoiceStatus,
-      confirmRetryInvoice,
-      executeRetryInvoice,
-      confirmDeleteInvoice,
-      executeDeleteInvoice,
-      deleteDialog,
-      deleting,
-      deleteInvoiceData,
-      deleteInvoiceEnLote,
-      changePage,
-      retryDialog,
-      retrying,
-      retryInvoiceData,
-      statusSnackbar,
-      statusSnackbarText,
-      statusSnackbarColor,
-      statusSnackbarIcon
+      router, empresaActiva,
+      invoices, total, loading, exportando, currentPage, itemsPerPage, sortBy, seleccion, ejecutando,
+      filtros, headers, searchTypes: SEARCH_TYPES, searchTypeLabel, hayFiltros, limpiarFiltros,
+      opcionesEstado: OPCIONES_ESTADO, tiposDE: TIPOS_DE,
+      loadInvoices, onOptions,
+      formatMonto, formatNumero, formatFechaHora, hace, estadoInfo, procesoInfo, tipoCorto, plazoTexto,
+      elegibles, descargarUno, descargarZip, exportarCsv, consultarEstadoUno, consultarEstadoMasivo,
+      dialogo, confirmar, ejecutarDialogo, resultado
     };
   }
 };
 </script>
+
+<style scoped>
+.text-mono {
+  font-family: 'Courier New', Courier, monospace;
+}
+</style>

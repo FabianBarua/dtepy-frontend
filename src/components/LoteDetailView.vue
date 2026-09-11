@@ -1,7 +1,7 @@
 <template>
   <v-container fluid>
     <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="4000" location="top">
-      <v-icon :start="snackbarIcon" size="large">{{ snackbarIcon }}</v-icon>
+      <v-icon start size="large">{{ snackbarIcon }}</v-icon>
       {{ snackbarText }}
       <template v-slot:actions>
         <v-btn variant="text" @click="snackbar = false">Cerrar</v-btn>
@@ -116,7 +116,7 @@
           :items="lote?.facturas || []"
           :loading="cargando"
           :items-per-page="10"
-          item-value="facturaId?._id || facturaId"
+          :item-value="(item) => item.facturaId?._id || item.facturaId"
         >
           <template v-slot:item.facturaId="{ item }">
             <router-link
@@ -204,6 +204,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { notificar } from '../composables/useNotificaciones';
 
 export default {
   name: 'LoteDetailView',
@@ -274,7 +275,7 @@ export default {
         lote.value = res.data.data || null;
       } catch (err) {
         console.error('Error cargando lote:', err);
-        snackbarText.value = '❌ Error cargando lote';
+        snackbarText.value = err.response?.status === 404 ? '❌ El lote no existe o no pertenece a tus empresas' : `❌ Error cargando lote: ${err.response?.data?.message || err.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;
@@ -293,7 +294,7 @@ export default {
         snackbar.value = true;
         await cargarLote();
       } catch (err) {
-        snackbarText.value = `❌ Error: ${err.response?.data?.error || err.message}`;
+        snackbarText.value = `❌ ${err.response?.data?.message || err.response?.data?.error || err.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;
@@ -318,7 +319,7 @@ export default {
         snackbar.value = true;
         await cargarLote();
       } catch (err) {
-        snackbarText.value = `❌ Error: ${err.response?.data?.error || err.message}`;
+        snackbarText.value = `❌ ${err.response?.data?.message || err.response?.data?.error || err.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;
@@ -335,14 +336,11 @@ export default {
       eliminando.value = true;
       try {
         const res = await axios.delete(`/api/lotes/${route.params.id}`);
-        snackbarText.value = `✅ ${res.data.message}`;
-        snackbarColor.value = 'success';
-        snackbarIcon.value = 'mdi-check-circle';
-        snackbar.value = true;
+        notificar.exito(res.data.message || 'Lote eliminado');
         dialogoEliminar.value = false;
         router.push('/lotes');
       } catch (err) {
-        snackbarText.value = `❌ Error: ${err.response?.data?.error || err.message}`;
+        snackbarText.value = `❌ ${err.response?.data?.message || err.response?.data?.error || err.message}`;
         snackbarColor.value = 'error';
         snackbarIcon.value = 'mdi-alert-circle';
         snackbar.value = true;

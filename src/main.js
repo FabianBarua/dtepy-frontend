@@ -10,23 +10,8 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import '@mdi/font/css/materialdesignicons.css'
 
-// Importar componentes
-import DashboardView from './components/DashboardView.vue'
-import InvoiceListView from './components/InvoiceListView.vue'
-import InvoiceDetailView from './components/InvoiceDetailView.vue'
-import LogsView from './components/LogsView.vue'
-import LoginView from './components/LoginView.vue'
-import ApiKeysView from './components/ApiKeysView.vue'
-import EmpresasView from './components/EmpresasView.vue'
-import QueueStatusView from './components/QueueStatusView.vue'
-import LotesView from './components/LotesView.vue'
-import LoteDetailView from './components/LoteDetailView.vue'
-import MantenimientoView from './components/MantenimientoView.vue'
-import CotizacionesView from './components/CotizacionesView.vue'
-import SmtpProvidersView from './components/SmtpProvidersView.vue'
-
 // Importar autenticación
-import { cargarSesion, cerrarSesion } from './auth'
+import { cargarSesion, cerrarSesion, rolActual } from './auth'
 
 // Importar configuración (URL del backend)
 import { aplicarApiBaseUrl, describirApiBaseUrl } from './config'
@@ -45,9 +30,7 @@ axios.interceptors.request.use(
     }
     return config;
   },
-  error => {
-    return Promise.reject(error);
-  }
+  error => Promise.reject(error)
 );
 
 // Interceptor para manejar errores de autenticación
@@ -58,27 +41,29 @@ axios.interceptors.response.use(
     // y no estamos ya en la página de login
     if (error.response?.status === 401 && window.location.pathname !== '/login') {
       cerrarSesion();
-      window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-// Definir rutas
+// Rutas con carga diferida: cada vista es su propio chunk, así el primer
+// render no baja el bundle entero (antes: un solo archivo de 1 MB).
 const routes = [
-  { path: '/login', component: LoginView, meta: { requiereAuth: false } },
-  { path: '/', component: DashboardView, meta: { requiereAuth: true } },
-  { path: '/invoices', component: InvoiceListView, meta: { requiereAuth: true } },
-  { path: '/invoices/:id', component: InvoiceDetailView, props: true, meta: { requiereAuth: true } },
-  { path: '/empresas', component: EmpresasView, meta: { requiereAuth: true } },
-  { path: '/logs', component: LogsView, meta: { requiereAuth: true } },
-  { path: '/api-keys', component: ApiKeysView, meta: { requiereAuth: true } },
-  { path: '/queue-status', component: QueueStatusView, meta: { requiereAuth: true } },
-  { path: '/lotes', component: LotesView, meta: { requiereAuth: true } },
-  { path: '/lotes/:id', component: LoteDetailView, meta: { requiereAuth: true } },
-  { path: '/mantenimiento', component: MantenimientoView, meta: { requiereAuth: true } },
-  { path: '/cotizaciones', component: CotizacionesView, meta: { requiereAuth: true } },
-  { path: '/smtp-providers', component: SmtpProvidersView, meta: { requiereAuth: true } }
+  { path: '/login', component: () => import('./components/LoginView.vue'), meta: { requiereAuth: false } },
+  { path: '/', component: () => import('./components/DashboardView.vue'), meta: { requiereAuth: true } },
+  { path: '/invoices', component: () => import('./components/InvoiceListView.vue'), meta: { requiereAuth: true } },
+  { path: '/invoices/:id', component: () => import('./components/InvoiceDetailView.vue'), props: true, meta: { requiereAuth: true } },
+  { path: '/empresas', component: () => import('./components/EmpresasView.vue'), meta: { requiereAuth: true } },
+  { path: '/logs', component: () => import('./components/LogsView.vue'), meta: { requiereAuth: true } },
+  { path: '/api-keys', component: () => import('./components/ApiKeysView.vue'), meta: { requiereAuth: true } },
+  { path: '/queue-status', component: () => import('./components/QueueStatusView.vue'), meta: { requiereAuth: true } },
+  { path: '/lotes', component: () => import('./components/LotesView.vue'), meta: { requiereAuth: true } },
+  { path: '/lotes/:id', component: () => import('./components/LoteDetailView.vue'), meta: { requiereAuth: true } },
+  { path: '/mantenimiento', component: () => import('./components/MantenimientoView.vue'), meta: { requiereAuth: true, soloAdmin: true } },
+  { path: '/usuarios', component: () => import('./components/UsuariosView.vue'), meta: { requiereAuth: true, soloAdmin: true } },
+  { path: '/cotizaciones', component: () => import('./components/CotizacionesView.vue'), meta: { requiereAuth: true } },
+  { path: '/smtp-providers', component: () => import('./components/SmtpProvidersView.vue'), meta: { requiereAuth: true } },
+  { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
 // Crear router
@@ -88,23 +73,21 @@ const router = createRouter({
 })
 
 // Proteger rutas
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const requiereAuth = to.meta.requiereAuth === true;
   const token = localStorage.getItem('token');
 
   if (to.path === '/login') {
     // Si ya está logueado, redirigir al dashboard
-    if (token) {
-      next('/');
-    } else {
-      next();
-    }
-  } else if (requiereAuth && !token) {
-    // Ruta protegida sin token
-    next('/login');
-  } else {
-    next();
+    return token ? '/' : true;
   }
+  if (requiereAuth && !token) {
+    return { path: '/login', query: to.fullPath !== '/' ? { volver: to.fullPath } : {} };
+  }
+  if (to.meta.soloAdmin && rolActual() !== 'admin') {
+    return '/';
+  }
+  return true;
 });
 
 // Cargar sesión al iniciar

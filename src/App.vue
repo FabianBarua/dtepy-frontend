@@ -17,8 +17,9 @@
         <v-tooltip activator="parent" location="bottom">{{ backendActual }}</v-tooltip>
       </v-chip>
 
-      <v-btn icon @click="checkApiConnection">
+      <v-btn icon @click="checkApiConnection" :loading="loadingApi">
         <v-icon>mdi-refresh</v-icon>
+        <v-tooltip activator="parent" location="bottom">Verificar conexión</v-tooltip>
       </v-btn>
 
       <v-btn icon @click="mostrarConfigServidor = true">
@@ -36,7 +37,7 @@
           </v-btn>
         </template>
 
-        <v-card min-width="250">
+        <v-card min-width="260">
           <v-list-item>
             <template v-slot:prepend>
               <v-avatar color="primary" size="40">
@@ -45,6 +46,12 @@
             </template>
             <v-list-item-title v-if="usuario">{{ usuario.nombre }} {{ usuario.apellido }}</v-list-item-title>
             <v-list-item-subtitle v-if="usuario">{{ usuario.email }}</v-list-item-subtitle>
+          </v-list-item>
+          <v-list-item v-if="usuario">
+            <v-chip size="small" :color="rolColor" variant="tonal" label>
+              <v-icon start size="small">{{ rolIcono }}</v-icon>
+              {{ rolEtiqueta }}
+            </v-chip>
           </v-list-item>
 
           <v-divider></v-divider>
@@ -60,84 +67,28 @@
     </v-app-bar>
 
     <v-navigation-drawer v-if="!isLoginPage" v-model="drawer" app>
-      <v-list>
+      <v-list nav density="comfortable">
         <v-list-item link to="/">
           <v-list-item-title class="text-h6 font-weight-bold">
-            DTE-PY Dashboard
+            DTE-PY
           </v-list-item-title>
+          <v-list-item-subtitle>Panel de facturación</v-list-item-subtitle>
         </v-list-item>
 
-        <v-divider class="my-4"></v-divider>
+        <v-divider class="my-2"></v-divider>
 
-        <v-list-item link to="/" :active="route.path === '/'">
-          <template v-slot:prepend>
-            <v-icon>mdi-view-dashboard</v-icon>
-          </template>
-          <v-list-item-title>Dashboard</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/invoices" :active="route.path === '/invoices'">
-          <template v-slot:prepend>
-            <v-icon>mdi-file-document-multiple</v-icon>
-          </template>
-          <v-list-item-title>Facturas</v-list-item-title>
-        </v-list-item>
-        
-        <v-list-item link to="/lotes" :active="route.path.startsWith('/lotes')">
-          <template v-slot:prepend>
-            <v-icon>mdi-package-variant-closed</v-icon>
-          </template>
-          <v-list-item-title>Lotes</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/empresas" :active="route.path === '/empresas'">
-          <template v-slot:prepend>
-            <v-icon>mdi-office-building</v-icon>
-          </template>
-          <v-list-item-title>Empresas</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/api-keys" :active="route.path === '/api-keys'">
-          <template v-slot:prepend>
-            <v-icon>mdi-key</v-icon>
-          </template>
-          <v-list-item-title>API Keys</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/cotizaciones" :active="route.path === '/cotizaciones'">
-          <template v-slot:prepend>
-            <v-icon>mdi-currency-usd</v-icon>
-          </template>
-          <v-list-item-title>Cotizaciones</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/smtp-providers" :active="route.path === '/smtp-providers'">
-          <template v-slot:prepend>
-            <v-icon>mdi-email-fast</v-icon>
-          </template>
-          <v-list-item-title>Proveedores SMTP</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/queue-status" :active="route.path === '/queue-status'">
-          <template v-slot:prepend>
-            <v-icon>mdi-clipboard-list-outline</v-icon>
-          </template>
-          <v-list-item-title>Cola de Procesos</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/logs" :active="route.path === '/logs'">
-          <template v-slot:prepend>
-            <v-icon>mdi-clipboard-text-clock</v-icon>
-          </template>
-          <v-list-item-title>Registros</v-list-item-title>
-        </v-list-item>
-
-        <v-list-item link to="/mantenimiento" :active="route.path === '/mantenimiento'">
-          <template v-slot:prepend>
-            <v-icon>mdi-wrench</v-icon>
-          </template>
-          <v-list-item-title>Mantenimiento</v-list-item-title>
-        </v-list-item>
+        <template v-for="item in menu_items" :key="item.to">
+          <v-list-subheader v-if="item.seccion">{{ item.seccion }}</v-list-subheader>
+          <v-list-item
+            v-else
+            link
+            :to="item.to"
+            :active="item.exacto ? route.path === item.to : route.path.startsWith(item.to)"
+            :prepend-icon="item.icono"
+          >
+            <v-list-item-title>{{ item.titulo }}</v-list-item-title>
+          </v-list-item>
+        </template>
       </v-list>
     </v-navigation-drawer>
 
@@ -149,17 +100,13 @@
       <span>&copy; {{ new Date().getFullYear() }} DTE-PY - <a class="text-primary" style="text-decoration: none; cursor: pointer;" href="https://jaranetwork.com" target="_blank">Jara Network</a></span>
     </v-footer>
 
-    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="5000">
-      {{ snackbarText }}
+    <AppSnackbar />
+
+    <v-snackbar v-model="snackbarConexion" color="error" :timeout="8000">
+      {{ snackbarConexionTexto }}
       <template v-slot:actions>
-        <v-btn
-          v-if="!apiConnected"
-          variant="text"
-          @click="snackbar = false; mostrarConfigServidor = true"
-        >
-          Configurar
-        </v-btn>
-        <v-btn variant="text" @click="snackbar = false">Cerrar</v-btn>
+        <v-btn variant="text" @click="snackbarConexion = false; mostrarConfigServidor = true">Configurar</v-btn>
+        <v-btn variant="text" @click="snackbarConexion = false">Cerrar</v-btn>
       </template>
     </v-snackbar>
 
@@ -168,30 +115,37 @@
 </template>
 
 <script>
-import { ref, onMounted, reactive, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { cerrarSesion } from './auth';
+import { cerrarSesion, useAuth, cargarSesion } from './auth';
 import EmpresaSelector from './components/EmpresaSelector.vue';
 import ServerConfigDialog from './components/ServerConfigDialog.vue';
+import AppSnackbar from './components/AppSnackbar.vue';
 import { describirApiBaseUrl, obtenerApiBaseUrl, probarConexion } from './config';
+import { establecerEmpresaActiva } from './composables/useEmpresaActiva';
+
+const ROLES = {
+  admin: { etiqueta: 'Administrador', color: 'error', icono: 'mdi-shield-crown' },
+  contador: { etiqueta: 'Contador', color: 'info', icono: 'mdi-calculator' },
+  usuario: { etiqueta: 'Usuario', color: 'primary', icono: 'mdi-account' }
+};
 
 export default {
   name: 'App',
   components: {
     EmpresaSelector,
-    ServerConfigDialog
+    ServerConfigDialog,
+    AppSnackbar
   },
   setup() {
     const drawer = ref(null);
     const route = useRoute();
     const router = useRouter();
     const menu = ref(false);
-    const usuario = ref(null);
-    const apiConnected = ref(false);
     const loadingApi = ref(false);
-    const snackbar = ref(false);
-    const snackbarText = ref('');
-    const snackbarColor = ref('info');
+    const apiConnected = ref(false);
+    const snackbarConexion = ref(false);
+    const snackbarConexionTexto = ref('');
 
     const apiStatusColor = ref('grey');
     const apiStatusIcon = ref('mdi-help-circle');
@@ -201,8 +155,35 @@ export default {
     const mostrarConfigServidor = ref(false);
     const backendActual = ref(describirApiBaseUrl());
 
-    // Estado de autenticación
-    const autenticado = ref(false);
+    // Estado de autenticación (reactivo, desde auth.js)
+    cargarSesion();
+    const { usuario, autenticado, esAdmin, rol } = useAuth();
+
+    const rolEtiqueta = computed(() => ROLES[rol.value]?.etiqueta || rol.value || '');
+    const rolColor = computed(() => ROLES[rol.value]?.color || 'grey');
+    const rolIcono = computed(() => ROLES[rol.value]?.icono || 'mdi-account');
+
+    // Menú lateral: lo administrativo solo para admin
+    const menu_items = computed(() => {
+      const items = [
+        { to: '/', titulo: 'Dashboard', icono: 'mdi-view-dashboard', exacto: true },
+        { to: '/invoices', titulo: 'Documentos', icono: 'mdi-file-document-multiple' },
+        { to: '/lotes', titulo: 'Lotes', icono: 'mdi-package-variant-closed' },
+        { seccion: 'Configuración' },
+        { to: '/empresas', titulo: 'Empresas', icono: 'mdi-office-building' },
+        { to: '/cotizaciones', titulo: 'Cotizaciones', icono: 'mdi-currency-usd' },
+        { to: '/smtp-providers', titulo: 'Proveedores SMTP', icono: 'mdi-email-fast' },
+        { to: '/api-keys', titulo: 'API Keys', icono: 'mdi-key' },
+        { seccion: 'Sistema' },
+        { to: '/queue-status', titulo: 'Cola de Procesos', icono: 'mdi-clipboard-list-outline' },
+        { to: '/logs', titulo: 'Registros', icono: 'mdi-clipboard-text-clock' }
+      ];
+      if (esAdmin.value) {
+        items.push({ to: '/usuarios', titulo: 'Usuarios', icono: 'mdi-account-group' });
+        items.push({ to: '/mantenimiento', titulo: 'Mantenimiento', icono: 'mdi-wrench' });
+      }
+      return items;
+    });
 
     // Cargar estado del drawer desde localStorage
     const drawerSaved = localStorage.getItem('sidebar-drawer');
@@ -218,27 +199,14 @@ export default {
     // Computed para verificar si es página de login
     const isLoginPage = computed(() => route.path === '/login');
 
-    // Cargar información del usuario
-    const cargarUsuario = () => {
-      const usuarioStr = localStorage.getItem('usuario');
-      const token = localStorage.getItem('token');
-      if (usuarioStr && token) {
-        usuario.value = JSON.parse(usuarioStr);
-        autenticado.value = true;
-      } else {
-        autenticado.value = false;
-      }
-    };
-
-    // Cambiar empresa - guardar en localStorage y actualizar URL
+    // Cambiar empresa: una sola fuente de verdad + reflejo en la URL
     const cambiarEmpresa = (empresaRuc) => {
-      console.log('Empresa cambiada (RUC):', empresaRuc);
-      localStorage.setItem('filtro-empresa', empresaRuc);
-      // Actualizar query param para que las vistas reaccionen
-      router.replace({ 
-        path: route.path, 
-        query: { ...route.query, empresa: empresaRuc } 
-      }).catch(() => {});
+      const valor = empresaRuc && empresaRuc !== 'all' ? empresaRuc : null;
+      establecerEmpresaActiva(valor);
+      const query = { ...route.query };
+      if (valor) query.empresa = valor; else delete query.empresa;
+      delete query.page;
+      router.replace({ path: route.path, query }).catch(() => {});
     };
 
     const checkApiConnection = async () => {
@@ -254,22 +222,19 @@ export default {
         apiStatusColor.value = 'success';
         apiStatusIcon.value = 'mdi-check-circle';
         apiStatusText.value = 'Conectado';
-        // No mostrar mensaje cuando hay conexión exitosa
       } else {
         apiConnected.value = false;
         apiStatusColor.value = 'error';
         apiStatusIcon.value = 'mdi-close-circle';
         apiStatusText.value = 'Sin conexión';
-        snackbarText.value = `${backendActual.value}: ${mensaje}`;
-        snackbarColor.value = 'error';
-        snackbar.value = true;
+        snackbarConexionTexto.value = `${backendActual.value}: ${mensaje}`;
+        snackbarConexion.value = true;
       }
 
       loadingApi.value = false;
     };
 
     onMounted(() => {
-      cargarUsuario();
       checkApiConnection();
     });
 
@@ -277,17 +242,20 @@ export default {
       drawer,
       route,
       menu,
+      menu_items,
       usuario,
       autenticado,
+      rolEtiqueta,
+      rolColor,
+      rolIcono,
       isLoginPage,
       apiConnected,
       loadingApi,
       apiStatusColor,
       apiStatusIcon,
       apiStatusText,
-      snackbar,
-      snackbarText,
-      snackbarColor,
+      snackbarConexion,
+      snackbarConexionTexto,
       mostrarConfigServidor,
       backendActual,
       checkApiConnection,
@@ -303,5 +271,8 @@ export default {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+.text-mono {
+  font-family: 'Courier New', Courier, monospace;
 }
 </style>
