@@ -1,4 +1,5 @@
 import { reactive, readonly, computed } from 'vue';
+import axios from 'axios';
 
 const state = reactive({
   usuario: null,
@@ -42,6 +43,28 @@ export function guardarSesion(token, usuario) {
   localStorage.setItem('usuario', JSON.stringify(usuario));
   localStorage.removeItem('empresaActiva');
   localStorage.removeItem('filtro-empresa');
+}
+
+/**
+ * Vuelve a pedir los datos del usuario al backend.
+ *
+ * El panel guarda el usuario al iniciar sesión; si un administrador le cambia
+ * el rol después, el menú seguiría armándose con el rol viejo hasta que vuelva
+ * a entrar. (El backend valida cada pedido con el rol real: esto es solo para
+ * que la interfaz no quede desfasada.) Una cuenta desactivada o eliminada
+ * recibe 401 y el interceptor de axios cierra la sesión.
+ */
+export async function refrescarSesion() {
+  if (!state.token) return;
+  try {
+    const { data } = await axios.get('/api/auth/perfil', { timeout: 5000 });
+    const usuario = data?.data?.usuario;
+    if (!usuario) return;
+    state.usuario = { ...state.usuario, ...usuario };
+    localStorage.setItem('usuario', JSON.stringify(state.usuario));
+  } catch (e) {
+    // Sin conexión u otro error: se sigue con los datos guardados.
+  }
 }
 
 // Cerrar sesión

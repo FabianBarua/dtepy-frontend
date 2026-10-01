@@ -343,8 +343,9 @@ export default {
       const { valid } = await formRef.value.validate();
       if (!valid) return;
       guardando.value = true;
-      // A un admin no se le comparte nada: ya ve todo.
-      const empresasCompartidas = form.rol === 'admin' ? [] : form.empresasCompartidas;
+      // A un admin no se le comparte nada (ya ve todo): el campo no se envía y
+      // el backend deja sus accesos como estaban, por si vuelve a ser usuario.
+      const empresasCompartidas = form.rol === 'admin' ? undefined : form.empresasCompartidas;
       try {
         if (editando.value) {
           const { data } = await axios.put(`/api/usuarios/${form._id}`, {

@@ -11,7 +11,7 @@ import * as directives from 'vuetify/directives'
 import '@mdi/font/css/materialdesignicons.css'
 
 // Importar autenticación
-import { cargarSesion, cerrarSesion, rolActual } from './auth'
+import { cargarSesion, cerrarSesion, rolActual, refrescarSesion } from './auth'
 
 // Importar configuración (URL del backend)
 import { aplicarApiBaseUrl, describirApiBaseUrl } from './config'
@@ -72,8 +72,15 @@ const router = createRouter({
   routes
 })
 
+// Sesión guardada + una consulta al backend por carga: el rol pudo cambiar
+// desde el último inicio de sesión (lo administra un admin en Usuarios). La
+// primera navegación espera esa respuesta para decidir con el rol real.
+cargarSesion();
+const sesionAlDia = refrescarSesion();
+
 // Proteger rutas
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  await sesionAlDia;
   const requiereAuth = to.meta.requiereAuth === true;
   const token = localStorage.getItem('token');
 
@@ -89,9 +96,6 @@ router.beforeEach((to) => {
   }
   return true;
 });
-
-// Cargar sesión al iniciar
-cargarSesion();
 
 // Configurar Vuetify
 const vuetify = createVuetify({
