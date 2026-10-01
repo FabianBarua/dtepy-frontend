@@ -38,6 +38,14 @@
                   <v-icon start size="x-small">mdi-numeric</v-icon>
                   {{ item.ruc }}
                 </v-chip>
+                <v-chip v-if="item.acceso === 'compartida'" size="small" color="teal" variant="tonal" class="ml-1" prepend-icon="mdi-share-variant">
+                  Compartida
+                  <v-tooltip activator="parent">Un administrador te dio acceso a esta empresa y a sus documentos</v-tooltip>
+                </v-chip>
+                <v-chip v-else-if="item.acceso === 'administrador'" size="small" color="error" variant="tonal" class="ml-1" prepend-icon="mdi-shield-crown">
+                  De otro usuario
+                  <v-tooltip activator="parent">La ves y la administrás por ser administrador</v-tooltip>
+                </v-chip>
               </template>
 
               <!-- Certificado -->
@@ -81,7 +89,10 @@
 
               <!-- Acciones -->
               <template #item.acciones="{ item }">
-                <v-menu v-model="item.menuOpen" :close-on-content-click="false" location="start">
+                <v-chip v-if="item.puedeAdministrar === false" size="small" variant="text" prepend-icon="mdi-lock-outline">
+                  Solo el dueño la configura
+                </v-chip>
+                <v-menu v-else v-model="item.menuOpen" :close-on-content-click="false" location="start">
                   <template v-slot:activator="{ props }">
                     <v-btn
                       color="primary"

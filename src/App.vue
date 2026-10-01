@@ -171,6 +171,7 @@ export default {
         { to: '/lotes', titulo: 'Lotes', icono: 'mdi-package-variant-closed' },
         { seccion: 'Configuración' },
         { to: '/empresas', titulo: 'Empresas', icono: 'mdi-office-building' },
+        ...(esAdmin.value ? [{ to: '/usuarios', titulo: 'Usuarios y accesos', icono: 'mdi-account-group' }] : []),
         { to: '/cotizaciones', titulo: 'Cotizaciones', icono: 'mdi-currency-usd' },
         { to: '/smtp-providers', titulo: 'Proveedores SMTP', icono: 'mdi-email-fast' },
         { to: '/api-keys', titulo: 'API Keys', icono: 'mdi-key' },
@@ -179,7 +180,6 @@ export default {
         { to: '/logs', titulo: 'Registros', icono: 'mdi-clipboard-text-clock' }
       ];
       if (esAdmin.value) {
-        items.push({ to: '/usuarios', titulo: 'Usuarios', icono: 'mdi-account-group' });
         items.push({ to: '/mantenimiento', titulo: 'Mantenimiento', icono: 'mdi-wrench' });
       }
       return items;
